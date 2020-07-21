@@ -41,7 +41,7 @@ Revolution (Wii) Archives. (SMG/SMG2, SMS)<br/>
 Library for Compressing/Decompressing data to/from YAZ0. Works with pretty much anything
 
 ## How to use
-Download the Libraries you want and then reference them in your program's Assembly References.<br/
+Download the Libraries you want and then reference them in your program's Assembly References.<br/>
 Using statements will also be needed. The statements are identical to the library name.<br/>
 Example:<br>
 ```using Hack.io.RARC;```<br/>
