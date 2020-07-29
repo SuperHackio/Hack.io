@@ -56,9 +56,9 @@ namespace Hack.io
         /// Writes a block of bytes to the file stream... but Backwards! (For Big Endian)
         /// </summary>
         /// <param name="FS">This</param>
-        /// <param name="array">The buffer containing data to write to the stream</param>
-        /// <param name="offset">The zero-based byte offset in array from which to begin copying bytes to the stream</param>
-        /// <param name="count">The maximum number of bytes to write</param>
+        /// <param name="Array">The buffer containing data to write to the stream</param>
+        /// <param name="Offset">The zero-based byte offset in array from which to begin copying bytes to the stream</param>
+        /// <param name="Count">The maximum number of bytes to write</param>
         /// <exception cref="ArgumentNullException">array is null.</exception>
         /// <exception cref="ArgumentException">offset and count describe an invalid range in array.</exception>
         /// <exception cref="ArgumentOutOfRangeException">offset or count is negative</exception>
@@ -66,10 +66,10 @@ namespace Hack.io
         /// <exception cref="ObjectDisposedException">The stream is closed</exception>
         /// <exception cref="NotSupportedException">The current stream instance does not support writing</exception>
         [DebuggerStepThrough]
-        public static void WriteReverse(this FileStream FS, byte[] array, int offset, int count)
+        public static void WriteReverse(this FileStream FS, byte[] Array, int Offset, int Count)
         {
-            Array.Reverse(array);
-            FS.Write(array, offset, count);
+            System.Array.Reverse(Array);
+            FS.Write(Array, Offset, Count);
         }
         /// <summary>
         /// Reads a String from the file. Strings are terminated by 0x00. <para/> The decoded string is in SHIFT-JIS
@@ -259,9 +259,9 @@ namespace Hack.io
         /// Writes a block of bytes to the file stream... but Backwards! (For Big Endian)
         /// </summary>
         /// <param name="FS">This</param>
-        /// <param name="array">The buffer containing data to write to the stream</param>
-        /// <param name="offset">The zero-based byte offset in array from which to begin copying bytes to the stream</param>
-        /// <param name="count">The maximum number of bytes to write</param>
+        /// <param name="Array">The buffer containing data to write to the stream</param>
+        /// <param name="Offset">The zero-based byte offset in array from which to begin copying bytes to the stream</param>
+        /// <param name="Count">The maximum number of bytes to write</param>
         /// <exception cref="ArgumentNullException">array is null.</exception>
         /// <exception cref="ArgumentException">offset and count describe an invalid range in array.</exception>
         /// <exception cref="ArgumentOutOfRangeException">offset or count is negative</exception>
@@ -269,10 +269,10 @@ namespace Hack.io
         /// <exception cref="ObjectDisposedException">The stream is closed</exception>
         /// <exception cref="NotSupportedException">The current stream instance does not support writing</exception>
         [DebuggerStepThrough]
-        public static void WriteReverse(this MemoryStream FS, byte[] array, int offset, int count)
+        public static void WriteReverse(this MemoryStream FS, byte[] Array, int Offset, int Count)
         {
-            Array.Reverse(array);
-            FS.Write(array, offset, count);
+            System.Array.Reverse(Array);
+            FS.Write(Array, Offset, Count);
         }
         /// <summary>
         /// Reads a String from the file. Strings are terminated by 0x00. <para/> The decoded string is in SHIFT-JIS
@@ -462,9 +462,9 @@ namespace Hack.io
         /// Writes a block of bytes to the file stream... but Backwards! (For Big Endian)
         /// </summary>
         /// <param name="FS">This</param>
-        /// <param name="array">The buffer containing data to write to the stream</param>
-        /// <param name="offset">The zero-based byte offset in array from which to begin copying bytes to the stream</param>
-        /// <param name="count">The maximum number of bytes to write</param>
+        /// <param name="Array">The buffer containing data to write to the stream</param>
+        /// <param name="Offset">The zero-based byte offset in array from which to begin copying bytes to the stream</param>
+        /// <param name="Count">The maximum number of bytes to write</param>
         /// <exception cref="ArgumentNullException">array is null.</exception>
         /// <exception cref="ArgumentException">offset and count describe an invalid range in array.</exception>
         /// <exception cref="ArgumentOutOfRangeException">offset or count is negative</exception>
@@ -472,10 +472,10 @@ namespace Hack.io
         /// <exception cref="ObjectDisposedException">The stream is closed</exception>
         /// <exception cref="NotSupportedException">The current stream instance does not support writing</exception>
         [DebuggerStepThrough]
-        public static void WriteReverse(this Stream FS, byte[] array, int offset, int count)
+        public static void WriteReverse(this Stream FS, byte[] Array, int Offset, int Count)
         {
-            Array.Reverse(array);
-            FS.Write(array, offset, count);
+            System.Array.Reverse(Array);
+            FS.Write(Array, Offset, Count);
         }
         /// <summary>
         /// Reads a String from the file. Strings are terminated by 0x00. <para/> The decoded string is in SHIFT-JIS
