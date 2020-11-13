@@ -268,7 +268,7 @@ namespace Hack.io.BCK
                 /// 
                 /// </summary>
                 /// <returns></returns>
-                public override string ToString() => $"Time: {Time} [{Value}]";
+                public override string ToString() => $"Time: {Time} [{Value*(180/Math.PI)}]";
 
                 /// <summary>
                 /// 
