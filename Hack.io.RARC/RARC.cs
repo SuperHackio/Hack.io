@@ -156,7 +156,7 @@ namespace Hack.io.RARC
             #region File Entries
             for (int i = 0; i < FlatFileList.Count; i++)
             {
-                RARCFile.Write(BitConverter.GetBytes(FlatFileList[i].FileID), 0, 2);
+                RARCFile.WriteReverse(BitConverter.GetBytes(FlatFileList[i].FileID), 0, 2);
                 RARCFile.WriteReverse(BitConverter.GetBytes(StringToHash(FlatFileList[i].Name)), 0, 2);
                 RARCFile.WriteReverse(BitConverter.GetBytes(FlatFileList[i].Type), 0, 2);
                 RARCFile.WriteReverse(BitConverter.GetBytes((ushort)StringLocations[FlatFileList[i].Name]), 0, 2);
