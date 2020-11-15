@@ -27,6 +27,10 @@ namespace Hack.io.RARC
         /// </summary>
         public Directory Root { get; set; }
         /// <summary>
+        /// 
+        /// </summary>
+        public bool KeepFileIDsSynced { get; set; } = true;
+        /// <summary>
         /// File Identifier
         /// </summary>
         private readonly string Magic = "RARC";
@@ -65,7 +69,7 @@ namespace Hack.io.RARC
 
         #region File Functions
         /// <summary>
-        /// Get or Set a file based on a path. When setting, if the file doesn't exist, it will be added (Along with any missing subdirectories)
+        /// Get or Set a file based on a path. When setting, if the file doesn't exist, it will be added (Along with any missing subdirectories). Set the file to null to delete it
         /// </summary>
         /// <param name="Path">The Path to take. Does not need the Root name to start, but cannot start with a '/'</param>
         /// <returns></returns>
@@ -73,14 +77,25 @@ namespace Hack.io.RARC
         {
             get
             {
+                if (Root is null)
+                    return null;
                 if (Path.StartsWith(Root.Name+"/"))
                     Path = Path.Substring(Root.Name.Length+1);
                 return Root[Path];
             }
             set
             {
+                if (!(value is File || value is Directory || value is null))
+                    throw new Exception($"Invalid object type of {value.GetType().ToString()}");
+
+                if (Root is null)
+                    Root = new Directory(this, null) { Name = Path.Split('/')[0] };
+
                 if (Path.StartsWith(Root.Name + "/"))
                     Path = Path.Substring(Root.Name.Length + 1);
+                
+                if (!KeepFileIDsSynced && value is File file && file.ID == -1 && !ItemExists(Path))
+                    file.ID = GetNextFreeID();
                 Root[Path] = value;
             }
         }
@@ -89,7 +104,37 @@ namespace Hack.io.RARC
         /// </summary>
         /// <param name="Path">The path to take</param>
         /// <returns>false if the Item isn't found</returns>
-        public bool ItemExists(string Path) => Root.ItemKeyExists(Path);
+        public bool ItemExists(string Path)
+        {
+            if (Path.StartsWith(Root.Name + "/"))
+                Path = Path.Substring(Root.Name.Length + 1);
+            return Root.ItemKeyExists(Path);
+        }
+        /// <summary>
+        /// Clears all the files out of this archive
+        /// </summary>
+        public void ClearAll() { Root.Clear(); }
+        /// <summary>
+        /// Moves an item to a new directory
+        /// </summary>
+        /// <param name="OriginalPath"></param>
+        /// <param name="NewPath"></param>
+        public void MoveItem(string OriginalPath, string NewPath)
+        {
+            if (OriginalPath.StartsWith(Root.Name + "/"))
+                OriginalPath = OriginalPath.Substring(Root.Name.Length + 1);
+            if (OriginalPath.Equals(NewPath))
+                return;
+            if (ItemExists(NewPath))
+                throw new Exception("An item with that name already exists in that directory");
+
+
+            dynamic dest = this[OriginalPath];
+            string[] split = NewPath.Split('/');
+            dest.Name = split[split.Length - 1];
+            this[OriginalPath] = null;
+            this[NewPath] = dest;
+        }
         #endregion
 
         /// <summary>
@@ -98,6 +143,7 @@ namespace Hack.io.RARC
         /// <param name="filepath">New file to save to</param>
         public void Save(string filepath)
         {
+            FileName = filepath;
             FileStream fs = new FileStream(filepath, FileMode.Create);
             Save(fs);
             fs.Close();
@@ -110,7 +156,8 @@ namespace Hack.io.RARC
         {
             Dictionary<File, uint> FileOffsets = new Dictionary<File, uint>();
             uint dataoffset = 0;
-            byte[] DataByteBuffer = GetDataBytes(Root, ref FileOffsets, ref dataoffset).ToArray();
+            uint MRAMSize = 0, ARAMSize = 0;
+            byte[] DataByteBuffer = GetDataBytes(Root, ref FileOffsets, ref dataoffset, ref MRAMSize, ref ARAMSize).ToArray();
             short FileID = 0;
             int NextFolderID = 1;
             List<RARCFileEntry> FlatFileList = GetFlatFileList(Root, FileOffsets, ref FileID, 0, ref NextFolderID, -1);
@@ -122,8 +169,11 @@ namespace Hack.io.RARC
 
             #region File Writing
             RARCFile.WriteString(Magic);
-            RARCFile.Write(new byte[12] { 0xDD, 0xDD, 0xDD, 0xDD, 0x00, 0x00, 0x00, 0x20, 0xDD, 0xDD, 0xDD, 0xDD }, 0, 12);
-            RARCFile.Write(new byte[16] { 0xEE, 0xEE, 0xEE, 0xEE, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }, 0, 16);
+            RARCFile.Write(new byte[16] { 0xDD, 0xDD, 0xDD, 0xDD, 0x00, 0x00, 0x00, 0x20, 0xDD, 0xDD, 0xDD, 0xDD, 0xEE, 0xEE, 0xEE, 0xEE }, 0, 16);
+            RARCFile.WriteReverse(BitConverter.GetBytes(MRAMSize), 0, 4);
+            RARCFile.WriteReverse(BitConverter.GetBytes(ARAMSize), 0, 4);
+            RARCFile.Write(new byte[4], 0, 4);
+            //Data Header
             RARCFile.WriteReverse(BitConverter.GetBytes(FlatDirectoryList.Count), 0, 4);
             RARCFile.Write(new byte[4] { 0xDD, 0xDD, 0xDD, 0xDD }, 0, 4); //Directory Nodes Location (-0x20)
             RARCFile.WriteReverse(BitConverter.GetBytes(FlatFileList.Count), 0, 4);
@@ -131,8 +181,8 @@ namespace Hack.io.RARC
             RARCFile.Write(new byte[4] { 0xEE, 0xEE, 0xEE, 0xEE }, 0, 4); //String Table Size
             RARCFile.Write(new byte[4] { 0xEE, 0xEE, 0xEE, 0xEE }, 0, 4); //string Table Location (-0x20)
             RARCFile.WriteReverse(BitConverter.GetBytes((ushort)FlatFileList.Count), 0, 2);
-            RARCFile.Write(new byte[2] { 0x01, 0x00 }, 0, 2);
-            RARCFile.Write(new byte[4] { 0x00, 0x00, 0x00, 0x00 }, 0, 4);
+            RARCFile.WriteByte((byte)(KeepFileIDsSynced ? 0x01 : 0x00));
+            RARCFile.Write(new byte[5], 0, 5);
             long DirectoryEntryOffset = RARCFile.Position;
 
             #region Directory Nodes
@@ -193,8 +243,9 @@ namespace Hack.io.RARC
             RARCFile.Position += 0x04;
             RARCFile.WriteReverse(BitConverter.GetBytes((int)(FileTableOffset - 0x20)), 0, 4);
             RARCFile.WriteReverse(BitConverter.GetBytes((int)(RARCFile.Length - FileTableOffset)), 0, 4);
-            RARCFile.WriteReverse(BitConverter.GetBytes((int)(RARCFile.Length - FileTableOffset)), 0, 4);
-            RARCFile.Position += 0x0C;
+            RARCFile.WriteReverse(BitConverter.GetBytes(MRAMSize), 0, 4);
+            RARCFile.WriteReverse(BitConverter.GetBytes(ARAMSize), 0, 4);
+            RARCFile.Position += 0x08;
             RARCFile.WriteReverse(BitConverter.GetBytes((int)(DirectoryEntryOffset - 0x20)), 0, 4);
             RARCFile.Position += 0x04;
             RARCFile.WriteReverse(BitConverter.GetBytes((int)(FileEntryOffset - 0x20)), 0, 4);
@@ -256,11 +307,22 @@ namespace Hack.io.RARC
             /// The contents of this directory.
             /// </summary>
             public Dictionary<string, object> Items { get; set; } = new Dictionary<string, object>();
+            /// <summary>
+            /// The parent directory (Null if non-existant)
+            /// </summary>
+            public Directory Parent { get; set; }
+            private readonly RARC OwnerArchive;
 
             /// <summary>
             /// Create a new Archive Directory
             /// </summary>
             public Directory() {}
+            /// <summary>
+            /// Create a new, child directory
+            /// </summary>
+            /// <param name="Owner">The Owner Archive</param>
+            /// <param name="parentdir">The Parent Directory. NULL if this is the Root Directory</param>
+            public Directory(RARC Owner, Directory parentdir) { OwnerArchive = Owner; Parent = parentdir; }
             /// <summary>
             /// Import a Folder into a RARCDirectory
             /// </summary>
@@ -271,8 +333,9 @@ namespace Hack.io.RARC
                 Name = DI.Name;
                 CreateFromFolder(FolderPath);
             }
-            internal Directory(int ID, List<RARCDirEntry> DirectoryNodeList, List<RARCFileEntry> FlatFileList, uint DataBlockStart, Stream RARCFile)
+            internal Directory(RARC Owner, int ID, List<RARCDirEntry> DirectoryNodeList, List<RARCFileEntry> FlatFileList, uint DataBlockStart, Stream RARCFile)
             {
+                OwnerArchive = Owner;
                 Name = DirectoryNodeList[ID].Name;
                 for (int i = (int)DirectoryNodeList[ID].FirstFileOffset; i < DirectoryNodeList[ID].FileCount + DirectoryNodeList[ID].FirstFileOffset; i++)
                 {
@@ -298,7 +361,7 @@ namespace Hack.io.RARC
                 {
                     if (item.Value is File file)
                     {
-                        file.Save(FolderPath);
+                        file.Save(FolderPath+"\\"+file.Name);
                     }
                     else if (item.Value is Directory directory)
                     {
@@ -313,7 +376,7 @@ namespace Hack.io.RARC
             /// </summary>
             /// <param name="Path">The Path to take</param>
             /// <returns></returns>
-            public object this[string Path]
+            internal object this[string Path]
             {
                 get
                 {
@@ -325,20 +388,34 @@ namespace Hack.io.RARC
                 set
                 {
                     string[] PathSplit = Path.Split('/');
-                    if (!ItemKeyExists(PathSplit[0]))
+                    if (!ItemKeyExists(PathSplit[0]) && !(value is null))
                     {
+                        ((dynamic)value).Parent = this;
                         if (PathSplit.Length == 1)
                             Items.Add(PathSplit[0], value);
                         else
                         {
-                            Items.Add(PathSplit[0], new Directory() { Name = PathSplit[0] });
+                            Items.Add(PathSplit[0], new Directory(OwnerArchive, this) { Name = PathSplit[0] });
                             ((Directory)Items[PathSplit[0]])[Path.Substring(PathSplit[0].Length + 1)] = value;
                         }
                     }
                     else
                     {
                         if (PathSplit.Length == 1)
-                            Items[PathSplit[0]] = value;
+                        {
+                            if (value is null)
+                            {
+                                if (ItemKeyExists(PathSplit[0]))
+                                    Items.Remove(PathSplit[0]);
+                                else
+                                    return;
+                            }
+                            else
+                            {
+                                ((dynamic)value).Parent = this;
+                                Items[PathSplit[0]] = value;
+                            }
+                        }
                         else if (Items[PathSplit[0]] is Directory dir)
                             dir[Path.Substring(PathSplit[0].Length + 1)] = value;
                     }
@@ -365,11 +442,111 @@ namespace Hack.io.RARC
             /// <param name="ItemName">The name of the Item to look for (Case Sensitive)</param>
             /// <returns>false if the Item doesn't exist</returns>
             public bool ItemKeyExists(string ItemName) => Items.ContainsKey(ItemName);
+            /// <summary>
+            /// Clears all the items out of this directory
+            /// </summary>
+            public void Clear()
+            {
+                foreach (KeyValuePair<string, object> item in Items)
+                {
+                    if (item.Value is Directory dir)
+                        dir.Clear();
+                }
+                Items.Clear();
+            }
+            /// <summary>
+            /// The full path of this directory. Cannot be used if this .arc doesn't belong to a RARC object
+            /// </summary>
+            public string FullPath
+            {
+                get
+                {
+                    if (OwnerArchive != null)
+                    {
+                        StringBuilder path = new StringBuilder();
+                        GetFullPath(path);
+                        return path.ToString();
+                    }
+                    else
+                        throw new InvalidOperationException("In order to use this, this directory must be part of a directory with a parent that is connected to a RARC object");
+                }
+            }
+            internal void GetFullPath(StringBuilder Path)
+            {
+                if (Parent != null)
+                {
+                    Parent.GetFullPath(Path);
+                    Path.Append("/");
+                    Path.Append(Name);
+                }
+                else
+                {
+                    Path.Append(Name);
+                }
+            }
+            /// <summary>
+            /// Checks to see if this directory has an owner archive
+            /// </summary>
+            public bool HasOwnerArchive => OwnerArchive != null;
+            /// <summary>
+            /// Sorts the Items inside this directory using the provided string[]. This string[] MUST contain all entries inside this directory
+            /// </summary>
+            /// <param name="NewItemOrder"></param>
+            public void SortItemsByOrder(string[] NewItemOrder)
+            {
+                if (NewItemOrder.Length != Items.Count)
+                    throw new Exception("Missing Items that exist in this Directory, but not in the provided Item Order");
+                Dictionary<string, object> NewItems = new Dictionary<string, object>();
+                for (int i = 0; i < NewItemOrder.Length; i++)
+                {
+                    if (!Items.ContainsKey(NewItemOrder[i]))
+                        throw new Exception("Missing Items that exist in this Directory, but not in the provided Item Order (Potentually a typo)");
+                    NewItems.Add(NewItemOrder[i], Items[NewItemOrder[i]]);
+                }
+                Items = NewItems;
+            }
+            /// <summary>
+            /// Moves an item from it's current directory to a new directory
+            /// </summary>
+            /// <param name="ItemKey">The Key of the Item</param>
+            /// <param name="TargetDirectory"></param>
+            public void MoveItemToDirectory(string ItemKey, Directory TargetDirectory)
+            {
+                if (TargetDirectory.ItemKeyExists(ItemKey))
+                    throw new Exception($"There is already a file with the name {ItemKey} inside {TargetDirectory.Name}");
+
+                TargetDirectory[ItemKey] = Items[ItemKey];
+                Items.Remove(ItemKey);
+            }
+            /// <summary>
+            /// Rename an item in the directory
+            /// </summary>
+            /// <param name="OldName"></param>
+            /// <param name="NewName"></param>
+            public void RenameItem(string OldName, string NewName)
+            {
+                if (ItemKeyExists(NewName))
+                    throw new Exception($"There is already a file with the name {NewName} inside {Name}");
+                dynamic activeitem = (dynamic)Items[OldName];
+                Items.Remove(OldName);
+                activeitem.Name = NewName;
+                Items.Add(NewName, activeitem);
+            }
 
             internal string ToTypeString() => Name.ToUpper().PadRight(4, ' ').Substring(0, 4);
-
-            private void CreateFromFolder(string FolderPath)
+            /// <summary>
+            /// 
+            /// </summary>
+            /// <returns></returns>
+            public override string ToString() => $"{Name} - {Items.Count} Item(s)";
+            /// <summary>
+            /// Create a RARC.Directory. You cannot use this function unless this directory is empty
+            /// </summary>
+            /// <param name="FolderPath"></param>
+            public void CreateFromFolder(string FolderPath)
             {
+                if (Items.Count > 0)
+                    throw new Exception("Cannot create a directory from a folder if Items exist");
                 string[] Found = System.IO.Directory.GetFiles(FolderPath, "*.*", SearchOption.TopDirectoryOnly);
                 for (int i = 0; i < Found.Length; i++)
                 {
@@ -409,9 +586,21 @@ namespace Hack.io.RARC
                 }
             }
             /// <summary>
+            /// Extra settings for this File.<para/>Default: <see cref="FileAttribute.FILE"/> | <see cref="FileAttribute.PRELOAD_TO_MRAM"/>
+            /// </summary>
+            public FileAttribute FileSettings { get; set; } = FileAttribute.FILE | FileAttribute.PRELOAD_TO_MRAM;
+            /// <summary>
+            /// The ID of the file in the archive
+            /// </summary>
+            public short ID { get; set; } = -1;
+            /// <summary>
             /// The Actual Data for the file
             /// </summary>
             public byte[] FileData { get; set; }
+            /// <summary>
+            /// The parent directory (Null if non-existant)
+            /// </summary>
+            public Directory Parent { get; set; }
             /// <summary>
             /// Load a File's Data based on a path
             /// </summary>
@@ -424,20 +613,33 @@ namespace Hack.io.RARC
             internal File(RARCFileEntry entry, uint DataBlockStart, Stream RARCFile)
             {
                 Name = entry.Name;
+                FileSettings = entry.RARCFileType;
+                ID = entry.FileID;
                 RARCFile.Position = DataBlockStart + entry.ModularA;
                 FileData = RARCFile.Read(0, entry.ModularB);
             }
             /// <summary>
             /// Saves this file to the Computer's Disk
             /// </summary>
-            /// <param name="Folderpath">The full path to save to</param>
-            /// <param name="NewName">Set this to rename the output file</param>
-            public void Save(string Folderpath, string NewName = null)
+            /// <param name="Filepath">The full path to save to</param>
+            public void Save(string Filepath)
             {
-                if ((Name == null || Name == "") && (NewName == null || NewName == ""))
-                    throw new ArgumentNullException($"Arguments 'Name' & 'NewName' are NULL!");
-                System.IO.File.WriteAllBytes(Path.Combine(Folderpath, NewName ?? Name), FileData);
+                System.IO.File.WriteAllBytes(Filepath, FileData);
             }
+            /// <summary>
+            /// 
+            /// </summary>
+            /// <param name="left"></param>
+            /// <param name="right"></param>
+            /// <returns></returns>
+            public static bool operator ==(File left, File right) => left.Equals(right);
+            /// <summary>
+            /// 
+            /// </summary>
+            /// <param name="left"></param>
+            /// <param name="right"></param>
+            /// <returns></returns>
+            public static bool operator !=(File left, File right) => !left.Equals(right);
             /// <summary>
             /// Compare this file to another
             /// </summary>
@@ -461,6 +663,42 @@ namespace Hack.io.RARC
                 hashCode = hashCode * -1521134295 + EqualityComparer<string>.Default.GetHashCode(Extension);
                 hashCode = hashCode * -1521134295 + EqualityComparer<byte[]>.Default.GetHashCode(FileData);
                 return hashCode;
+            }
+            /// <summary>
+            /// 
+            /// </summary>
+            /// <returns></returns>
+            public override string ToString() => $"{ID} - {Name} ({FileSettings.ToString()}) [0x{FileData.Length.ToString("X8")}]";
+
+            /// <summary>
+            /// The full path of this file. Cannot be used if this file doesn't belong to a RARC object somehow
+            /// </summary>
+            public string FullPath
+            {
+                get
+                {
+                    if (Parent.HasOwnerArchive)
+                    {
+                        StringBuilder path = new StringBuilder();
+                        GetFullPath(path);
+                        return path.ToString();
+                    }
+                    else
+                        throw new InvalidOperationException("In order to use this, this file must be part of a directory with a parent that is connected to a RARC object");
+                }
+            }
+            private void GetFullPath(StringBuilder Path)
+            {
+                if (Parent != null)
+                {
+                    Parent.GetFullPath(Path);
+                    Path.Append("/");
+                    Path.Append(Name);
+                }
+                else
+                {
+                    Path.Append(Name);
+                }
             }
         }
 
@@ -520,8 +758,9 @@ namespace Hack.io.RARC
             /// </summary>
             public int ModularB;
             internal short NameHash;
+            internal FileAttribute RARCFileType => (FileAttribute)((Type & 0xFF00) >> 8);
 
-            public override string ToString() => $"({FileID}) {Name}, {Type.ToString("X").PadLeft(4, '0')}, [{ModularA.ToString("X").PadLeft(8, '0')}][{ModularB.ToString("X").PadLeft(8, '0')}]";
+            public override string ToString() => $"({FileID}) {Name}, {Type.ToString("X").PadLeft(4, '0')} ({RARCFileType.ToString()}), [{ModularA.ToString("X").PadLeft(8, '0')}][{ModularB.ToString("X").PadLeft(8, '0')}]";
         }
 
         /// <summary>
@@ -546,21 +785,32 @@ namespace Hack.io.RARC
         #region Privates
         private void Read(Stream RARCFile)
         {
+            #region Header
             if (RARCFile.ReadString(4) != Magic)
                 throw new Exception($"Invalid Identifier. Expected \"{Magic}\"");
             uint FileSize = BitConverter.ToUInt32(RARCFile.ReadReverse(0, 4), 0),
-                TrashData = BitConverter.ToUInt32(RARCFile.ReadReverse(0, 4), 0),
-                DataOffset = BitConverter.ToUInt32(RARCFile.ReadReverse(0, 4), 0) + 0x20;
-            RARCFile.Position += 0x10; //Skip the Lengths and Unknowns
+                DataHeaderOffset = BitConverter.ToUInt32(RARCFile.ReadReverse(0, 4), 0),
+                DataOffset = BitConverter.ToUInt32(RARCFile.ReadReverse(0, 4), 0) + 0x20,
+                DataLength = BitConverter.ToUInt32(RARCFile.ReadReverse(0, 4), 0),
+                MRAMSize = BitConverter.ToUInt32(RARCFile.ReadReverse(0, 4), 0),
+                ARAMSize = BitConverter.ToUInt32(RARCFile.ReadReverse(0, 4), 0);
+            RARCFile.Position += 0x04; //Skip the supposed padding
+            #endregion
+
+            #region Data Header
             uint DirectoryCount = BitConverter.ToUInt32(RARCFile.ReadReverse(0, 4), 0),
-                DirectoryTableOffset = BitConverter.ToUInt32(RARCFile.ReadReverse(0, 4), 0) + 0x20,
-                FileEntryCount = BitConverter.ToUInt32(RARCFile.ReadReverse(0, 4), 0),
-                FileEntryTableOffset = BitConverter.ToUInt32(RARCFile.ReadReverse(0, 4), 0) + 0x20;
-            RARCFile.Position += 0x04;
-            uint StringTableOffset = BitConverter.ToUInt32(RARCFile.ReadReverse(0, 4), 0) + 0x20;
+                    DirectoryTableOffset = BitConverter.ToUInt32(RARCFile.ReadReverse(0, 4), 0) + 0x20,
+                    FileEntryCount = BitConverter.ToUInt32(RARCFile.ReadReverse(0, 4), 0),
+                    FileEntryTableOffset = BitConverter.ToUInt32(RARCFile.ReadReverse(0, 4), 0) + 0x20,
+                    StringTableSize = BitConverter.ToUInt32(RARCFile.ReadReverse(0, 4), 0),
+                    StringTableOffset = BitConverter.ToUInt32(RARCFile.ReadReverse(0, 4), 0) + 0x20;
+            ushort NextFreeFileID = BitConverter.ToUInt16(RARCFile.ReadReverse(0, 2), 0);
+            KeepFileIDsSynced = RARCFile.ReadByte() != 0x00;
+            #endregion
 
 #if DEBUG
-            //string XML = $"<RarcHeader StringOffset=\"0x{StringTableOffset.ToString("X8")}\">\n";
+            //string XML = $"<RarcHeader Magic=\"{Magic}\"  FileSize=\"0x{FileSize.ToString("X8")}\"  DataHeaderOffset=\"0x{DataHeaderOffset.ToString("X8")}\"  DataOffset=\"0x{DataOffset.ToString("X8")}\"  DataLength=\"0x{DataLength.ToString("X8")}\"  MRAM=\"0x{MRAMSize.ToString("X8")}\"  ARAM=\"0x{ARAMSize.ToString("X8")}\"/>\n" +
+            //    $"<DataHeader DirectoryCount=\"{DirectoryCount.ToString("2")}\"  DirectoryTableOffset=\"0x{DirectoryTableOffset.ToString("X8")}\"  FileEntryCount=\"{FileEntryCount.ToString("2")}\"  FileEntryTableOffset=\"0x{FileEntryTableOffset.ToString("X8")}\"  StringTableSize=\"0x{StringTableSize.ToString("X8")}\"  StringTableOffset=\"0x{StringTableOffset.ToString("X8")}\"  NextFreeID=\"{NextFreeFileID.ToString("0000")}\"  SyncFileIDs=\"{KeepFileIDsSynced}\"/>\n";
 #endif
 
             #region Directory Nodes
@@ -604,18 +854,18 @@ namespace Hack.io.RARC
                 FlatFileList[FlatFileList.Count - 1].Name = RARCFile.ReadString();
                 RARCFile.Position = Pauseposition;
             }
-//#if DEBUG
-//            for (int i = 0; i < FlatFileList.Count; i++)
-//                XML += $"<RarcFileEntry ID=\"{FlatFileList[i].FileID.ToString("000").PadLeft(4, '+')}\" Name=" + ($"\"{FlatFileList[i].Name}\"").PadRight(30, ' ') + $" Type=\"{FlatFileList[i].Type.ToString("X").PadLeft(4, '0')}\"\t FileOrDirectory=\"{FlatFileList[i].ModularA.ToString("X").PadLeft(8, '0')}\"\t Size=\"{FlatFileList[i].ModularB.ToString("X").PadLeft(8, '0')}\" />\n";
+#if DEBUG
+            //for (int i = 0; i < FlatFileList.Count; i++)
+            //    XML += $"<RarcFileEntry ID=\"{FlatFileList[i].FileID.ToString("0000").PadLeft(5, '+')}\" Name=" + ($"\"{FlatFileList[i].Name}\"").PadRight(30, ' ') + $" Type=\"{FlatFileList[i].Type.ToString("X4")}\"\t RARCFileType=\"{(FlatFileList[i].RARCFileType.ToString()+ "\"").PadRight(12, ' ')}\t FileOrDirectory=\"{FlatFileList[i].ModularA.ToString("X").PadLeft(8, '0')}\"\t Size=\"{FlatFileList[i].ModularB.ToString("X").PadLeft(8, '0')}\" />\n";
 
-//            System.IO.File.WriteAllText("Original.xml", XML);
-//#endif
+            //System.IO.File.WriteAllText("Original.xml", XML);
+#endif
 
 
             List<Directory> Directories = new List<Directory>();
             for (int i = 0; i < FlatDirectoryList.Count; i++)
             {
-                Directories.Add(new Directory(i, FlatDirectoryList, FlatFileList, DataOffset, RARCFile));
+                Directories.Add(new Directory(this, i, FlatDirectoryList, FlatFileList, DataOffset, RARCFile));
             }
 
             for (int i = 0; i < Directories.Count; i++)
@@ -632,40 +882,97 @@ namespace Hack.io.RARC
                             continue;
                         }
                         if (DirectoryItem.Key.Equals(".."))
+                        {
+                            if (fe.ModularA == -1)
+                                continue;
+                            Directories[i].Parent = Directories[fe.ModularA];
                             continue;
+                        }
                         if (!Directories[fe.ModularA].Name.Equals(DirectoryItem.Key))
                             Directories[fe.ModularA].Name = DirectoryItem.Key;
                         templist.Add(new KeyValuePair<string, object>(DirectoryItem.Key, Directories[fe.ModularA]));
                     }
                     else
+                    {
+                        ((File)DirectoryItem.Value).Parent = Directories[i];
                         templist.Add(DirectoryItem);
+                    }
                 }
                 Directories[i].Items = templist.ToDictionary(K => K.Key, V => V.Value);
             }
             #endregion
         }
-        private List<byte> GetDataBytes(Directory Root, ref Dictionary<File, uint> Offsets, ref uint LocalOffset)
+        private List<byte> GetDataBytes(Directory Root, ref Dictionary<File, uint> Offsets, ref uint LocalOffset, ref uint MRAMSize, ref uint ARAMSize)
         {
             List<byte> DataBytes = new List<byte>();
+            //First, we must sort the files in the correct order
+            //MRAM First. ARAM Second, DVD Last
+            List<File> MRAM = new List<File>(), ARAM = new List<File>(), DVD = new List<File>();
+            SortFilesByLoadType(Root, ref MRAM, ref ARAM, ref DVD);
+
+            for (int i = 0; i < MRAM.Count; i++)
+            {
+                Offsets.Add(MRAM[i], LocalOffset);
+                List<byte> temp = new List<byte>();
+                temp.AddRange(MRAM[i].FileData);
+
+                while (temp.Count % 32 != 0)
+                    temp.Add(0x00);
+                DataBytes.AddRange(temp);
+                LocalOffset += (uint)temp.Count;
+            }
+            MRAMSize = LocalOffset;
+            for (int i = 0; i < ARAM.Count; i++)
+            {
+                Offsets.Add(ARAM[i], LocalOffset);
+                List<byte> temp = new List<byte>();
+                temp.AddRange(ARAM[i].FileData);
+
+                while (temp.Count % 32 != 0)
+                    temp.Add(0x00);
+                DataBytes.AddRange(temp);
+                LocalOffset += (uint)temp.Count;
+            }
+            ARAMSize = LocalOffset - MRAMSize;
+            for (int i = 0; i < DVD.Count; i++)
+            {
+                Offsets.Add(DVD[i], LocalOffset);
+                List<byte> temp = new List<byte>();
+                temp.AddRange(DVD[i].FileData);
+
+                while (temp.Count % 32 != 0)
+                    temp.Add(0x00);
+                DataBytes.AddRange(temp);
+                LocalOffset += (uint)temp.Count;
+            }
+            return DataBytes;
+        }
+        private void SortFilesByLoadType(Directory Root, ref List<File> MRAM, ref List<File> ARAM, ref List<File> DVD)
+        {
             foreach (KeyValuePair<string, object> item in Root.Items)
             {
                 if (item.Value is Directory dir)
                 {
-                    DataBytes.AddRange(GetDataBytes(dir, ref Offsets, ref LocalOffset));
+                    SortFilesByLoadType(dir, ref MRAM, ref ARAM, ref DVD);
                 }
                 else if (item.Value is File file)
                 {
-                    Offsets.Add(file, LocalOffset);
-                    List<byte> temp = new List<byte>();
-                    temp.AddRange(file.FileData);
-
-                    while (temp.Count % 32 != 0)
-                        temp.Add(0x00);
-                    DataBytes.AddRange(temp);
-                    LocalOffset += (uint)temp.Count;
+                    if (file.FileSettings.HasFlag(FileAttribute.PRELOAD_TO_MRAM))
+                    {
+                        MRAM.Add(file);
+                    }
+                    else if (file.FileSettings.HasFlag(FileAttribute.PRELOAD_TO_ARAM))
+                    {
+                        ARAM.Add(file);
+                    }
+                    else if (file.FileSettings.HasFlag(FileAttribute.LOAD_FROM_DVD))
+                    {
+                        DVD.Add(file);
+                    }
+                    else
+                        throw new Exception($"File entry \"{file.ToString()}\" is not set as being loaded into any type of RAM, or from DVD.");
                 }
             }
-            return DataBytes;
         }
         private List<RARCFileEntry> GetFlatFileList(Directory Root, Dictionary<File, uint> FileOffsets, ref short GlobalFileID, int CurrentFolderID, ref int NextFolderID, int BackwardsFolderID)
         {
@@ -675,7 +982,7 @@ namespace Hack.io.RARC
             {
                 if (item.Value is File file)
                 {
-                    FileList.Add(new RARCFileEntry() { FileID = GlobalFileID++, Name = file.Name, ModularA = (int)FileOffsets[file], ModularB = file.FileData.Length, Type = 0x1100 });
+                    FileList.Add(new RARCFileEntry() { FileID = KeepFileIDsSynced ? GlobalFileID++ : file.ID, Name = file.Name, ModularA = (int)FileOffsets[file], ModularB = file.FileData.Length, Type = (short)((ushort)file.FileSettings << 8) });
                 }
                 else if (item.Value is Directory Currentdir)
                 {
@@ -691,6 +998,23 @@ namespace Hack.io.RARC
             for (int i = 0; i < Directories.Count; i++)
             {
                 FileList.AddRange(GetFlatFileList(Directories[i].Value, FileOffsets, ref GlobalFileID, FileList[Directories[i].Key].ModularA, ref NextFolderID, CurrentFolderID));
+            }
+            return FileList;
+        }
+        private List<File> GetFlatFileList(Directory Root)
+        {
+            List<File> FileList = new List<File>();
+            foreach (KeyValuePair<string, object> item in Root.Items)
+            {
+                if (item.Value is File file)
+                {
+                    FileList.Add(file);
+                }
+                else if (item.Value is Directory Currentdir)
+                {
+                    FileList.AddRange(GetFlatFileList(Currentdir));
+                    FileList.Add(null);
+                }
             }
             return FileList;
         }
@@ -737,7 +1061,67 @@ namespace Hack.io.RARC
             }
             return strings;
         }
+        
+        private short GetNextFreeID()
+        {
+            List<short> AllIDs = new List<short>();
+            List<File> FlatFileList = GetFlatFileList(Root);
+            for (int i = 0; i < FlatFileList.Count; i++)
+                AllIDs.Add(FlatFileList[i]?.ID ?? (short)AllIDs.Count);
+            if (AllIDs.Count == 0)
+                return 0;
+            int a = AllIDs.OrderBy(x => x).First();
+            int b = AllIDs.OrderBy(x => x).Last();
+            List<int> LiterallyAllIDs = Enumerable.Range(0, b - a + 1).ToList();
+            List<short> Shorts = new List<short>();
+            for (int i = 0; i < LiterallyAllIDs.Count; i++)
+            {
+                Shorts.Add((short)LiterallyAllIDs[i]);
+            }
+
+            List<short> Remaining = Shorts.Except(AllIDs).ToList();
+            if (Remaining.Count == 0)
+                return (short)AllIDs.Count;
+            else
+                return Remaining.First();
+        }
         #endregion
+
+        /// <summary>
+        /// File Attibutes for <see cref="File"/>
+        /// </summary>
+        [Flags]
+        public enum FileAttribute
+        {
+            /// <summary>
+            /// Indicates this is a File
+            /// </summary>
+            FILE = 0x01,
+            /// <summary>
+            /// Directory. Not allowed to be used for <see cref="File"/>s, only here for reference
+            /// </summary>
+            DIRECTORY = 0x02,
+            /// <summary>
+            /// Indicates that this file is compressed
+            /// </summary>
+            COMPRESSED = 0x04,
+            /// <summary>
+            /// Indicates that this file gets Pre-loaded into Main RAM
+            /// </summary>
+            PRELOAD_TO_MRAM = 0x10,
+            /// <summary>
+            /// Indicates that this file gets Pre-loaded into Auxiliary RAM
+            /// </summary>
+            PRELOAD_TO_ARAM = 0x20,
+            /// <summary>
+            /// Indicates that this file does not get pre-loaded, but rather read from the DVD
+            /// </summary>
+            LOAD_FROM_DVD = 0x40,
+            /// <summary>
+            /// Indicates that this file is YAZ0 Compressed
+            /// </summary>
+            YAZ0_COMPRESSED = 0x80
+        }
 
         #region Junk
         //public void Save(string Filename = null)
