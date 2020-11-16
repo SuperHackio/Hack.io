@@ -108,7 +108,7 @@ namespace Hack.io.RARC
         {
             if (Path.StartsWith(Root.Name + "/"))
                 Path = Path.Substring(Root.Name.Length + 1);
-            return Root.ItemKeyExists(Path);
+            return Root.ItemExists(Path);
         }
         /// <summary>
         /// Clears all the files out of this archive
@@ -311,7 +311,7 @@ namespace Hack.io.RARC
             /// The parent directory (Null if non-existant)
             /// </summary>
             public Directory Parent { get; set; }
-            private readonly RARC OwnerArchive;
+            private RARC OwnerArchive;
 
             /// <summary>
             /// Create a new Archive Directory
@@ -392,7 +392,12 @@ namespace Hack.io.RARC
                     {
                         ((dynamic)value).Parent = this;
                         if (PathSplit.Length == 1)
+                        {
+                            if (value is Directory dir)
+                                dir.OwnerArchive = OwnerArchive;
+                            ((dynamic)value).Parent = this;
                             Items.Add(PathSplit[0], value);
+                        }
                         else
                         {
                             Items.Add(PathSplit[0], new Directory(OwnerArchive, this) { Name = PathSplit[0] });
