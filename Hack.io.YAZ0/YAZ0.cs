@@ -140,7 +140,7 @@ namespace Hack.io.YAZ0
                 }
             }
 
-            return BuildFinalBlocks(ref InstructionBits, ref UncompressedData, ref CompressedData, decompressedSize, 0);
+            return BuildFinalBlocks(ref InstructionBits, ref UncompressedData, ref CompressedData, (int)Temp.Length, 0);
         }
         //From https://github.com/Gericom/EveryFileExplorer/blob/master/CommonCompressors/YAZ0.cs
         private static unsafe byte[] QuickCompress(byte[] Data)
@@ -301,8 +301,14 @@ namespace Hack.io.YAZ0
             //add Yaz0 magic number
             finalYAZ0Block.AddRange(Encoding.ASCII.GetBytes("Yaz0"));
 
-            byte[] decompressedSizeArray = BitConverter.GetBytes(decompressedSize);
-            Array.Reverse(decompressedSizeArray);
+            byte[] decompressedSizeArray = new byte[4];
+            decompressedSizeArray[0] = (byte)((decompressedSize >> 24) & 0xFF);
+            decompressedSizeArray[1] = (byte)((decompressedSize >> 16) & 0xFF);
+            decompressedSizeArray[2] = (byte)((decompressedSize >> 8) & 0xFF);
+            decompressedSizeArray[3] = (byte)((decompressedSize >> 0) & 0xFF);
+
+            //byte[] decompressedSizeArray = BitConverter.GetBytes(decompressedSize);
+            //Array.Reverse(decompressedSizeArray);
             finalYAZ0Block.AddRange(decompressedSizeArray);
 
             //add 8 0's per format specification
