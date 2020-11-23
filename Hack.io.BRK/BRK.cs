@@ -65,9 +65,9 @@ namespace Hack.io.BRK
         /// Read a BRK from an Archive File (RARCFile)
         /// </summary>
         /// <param name="ArchiveFile">File that is supposedly a BRK File</param>
-        public BRK(RARC.RARCFile ArchiveFile)
+        public BRK(RARC.RARC.File ArchiveFile)
         {
-            Read(ArchiveFile.GetMemoryStream());
+            Read((MemoryStream)ArchiveFile);
             Name = ArchiveFile.Name;
         }
         /// <summary>
@@ -918,18 +918,18 @@ namespace Hack.io.BRK
         /// Cast a BRK to a RARCFile
         /// </summary>
         /// <param name="x"></param>
-        public static implicit operator RARC.RARCFile(BRK x)
+        public static implicit operator RARC.RARC.File(BRK x)
         {
-            return new RARC.RARCFile() { FileData = x.Save().GetBuffer(), Name = x.Name };
+            return new RARC.RARC.File(x.Name, x.Save());
         }
 
         /// <summary>
         /// Cast a RARCFile to a BRK
         /// </summary>
         /// <param name="x"></param>
-        public static implicit operator BRK(RARC.RARCFile x)
+        public static implicit operator BRK(RARC.RARC.File x)
         {
-            return new BRK(x.GetMemoryStream(), x.Name);
+            return new BRK((MemoryStream)x, x.Name);
         }
 
         //=====================================================================

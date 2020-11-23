@@ -15,55 +15,41 @@ namespace Hack.io.YAZ0
     {
         private static readonly string Magic = "Yaz0";
         /// <summary>
-        /// Decompress a file into a memorystream
+        /// Decompress a File
         /// </summary>
-        /// <param name="Filename"></param>
-        /// <returns></returns>
-        public static MemoryStream Decompress(string Filename)
-        {
-            FileStream YAZ0 = new FileStream(Filename, FileMode.Open);
-            MemoryStream MS = new MemoryStream(Decomp(YAZ0));
-            YAZ0.Close();
-            return MS;
-        }
+        /// <param name="Filename">Full path to the file</param>
+        public static void Decompress(string Filename) => File.WriteAllBytes(Filename, Decomp(File.ReadAllBytes(Filename)));
         /// <summary>
-        /// Decompress a byte[] into a memorystream
+        /// Decompress a MemoryStream
         /// </summary>
         /// <param name="Data"></param>
         /// <returns></returns>
-        public static MemoryStream Decompress(byte[] Data)
-        {
-            return new MemoryStream(Decomp(new MemoryStream(Data)));
-        }
+        public static MemoryStream Decompress(MemoryStream Data) => new MemoryStream(Decomp(Data.ToArray()));
         /// <summary>
-        /// Compress a file
+        /// Decompress a byte[]
+        /// </summary>
+        /// <param name="Data"></param>
+        /// <returns></returns>
+        public static byte[] Decompress(byte[] Data) => Decomp(Data);
+        /// <summary>
+        /// Compress a File
         /// </summary>
         /// <param name="Filename">File to compress</param>
         /// <param name="Quick">If true, takes shorter time to compress, but is overall weaker then if disabled (resulting in larger files)</param>
-        public static void Compress(string Filename, bool Quick = false)
-        {
-            byte[] Final;
-            if (Quick)
-            {
-                byte[] Original = File.ReadAllBytes(Filename);
-                Final = QuickCompress(Original);
-            }
-            else
-            {
-                FileStream YAZ0 = new FileStream(Filename, FileMode.Open);
-                Final = DoCompression(YAZ0);
-                YAZ0.Close();
-            }
-            File.WriteAllBytes(Filename, Final);
-        }
+        public static void Compress(string Filename, bool Quick = false) => File.WriteAllBytes(Filename, Quick ? QuickCompress(File.ReadAllBytes(Filename)) : DoCompression(File.ReadAllBytes(Filename)));
         /// <summary>
         /// Compress a MemoryStream
         /// </summary>
         /// <param name="YAZ0">MemoryStream to compress</param>
-        public static byte[] Compress(MemoryStream YAZ0)
-        {
-            return DoCompression(YAZ0);
-        }
+        /// <param name="Quick">The Algorithm to use. True to use YAZ0 Fast</param>
+        public static MemoryStream Compress(MemoryStream YAZ0, bool Quick = false) => new MemoryStream(Quick ? QuickCompress(YAZ0.ToArray()) : DoCompression(YAZ0.ToArray()));
+        /// <summary>
+        /// Compress a byte[]
+        /// </summary>
+        /// <param name="Data">The data to compress</param>
+        /// <param name="Quick">The Algorithm to use. True to use YAZ0 Fast</param>
+        /// <returns></returns>
+        public static byte[] Compress(byte[] Data, bool Quick = false) => Quick ? QuickCompress(Data) : DoCompression(Data);
         /// <summary>
         /// Checks a given file for Yaz0 Encoding
         /// </summary>
@@ -76,14 +62,17 @@ namespace Hack.io.YAZ0
             YAZ0.Close();
             return Check;
         }
+        /// <summary>
+        /// Converts a Yaz0 Encoded file to a Yaz0 Decoded MemoryStream
+        /// </summary>
+        /// <param name="Filename">The file to decode into a MemoryStream</param>
+        /// <returns>The decoded MemoryStream</returns>
+        public static MemoryStream DecompressToMemoryStream(string Filename) => new MemoryStream(Decomp(File.ReadAllBytes(Filename)));
 
-        
-        private static byte[] DoCompression(Stream YAZ0)
+
+        //Based on https://github.com/Daniel-McCarthy/Mr-Peeps-Compressor/blob/master/PeepsCompress/PeepsCompress/Algorithm%20Classes/YAZ0.cs
+        private static byte[] DoCompression(byte[] file)
         {
-            MemoryStream Temp = new MemoryStream();
-            YAZ0.CopyTo(Temp);
-            byte[] file = Temp.GetBuffer();
-
             List<byte> InstructionBits = new List<byte>();
             List<byte> SetDictionaries = new List<byte>();
             List<byte> UncompressedData = new List<byte>();
@@ -140,7 +129,7 @@ namespace Hack.io.YAZ0
                 }
             }
 
-            return BuildFinalBlocks(ref InstructionBits, ref UncompressedData, ref CompressedData, (int)Temp.Length, 0);
+            return BuildFinalBlocks(ref InstructionBits, ref UncompressedData, ref CompressedData, file.Length, 0);
         }
         //From https://github.com/Gericom/EveryFileExplorer/blob/master/CommonCompressors/YAZ0.cs
         private static unsafe byte[] QuickCompress(byte[] Data)
@@ -306,9 +295,7 @@ namespace Hack.io.YAZ0
             decompressedSizeArray[1] = (byte)((decompressedSize >> 16) & 0xFF);
             decompressedSizeArray[2] = (byte)((decompressedSize >> 8) & 0xFF);
             decompressedSizeArray[3] = (byte)((decompressedSize >> 0) & 0xFF);
-
-            //byte[] decompressedSizeArray = BitConverter.GetBytes(decompressedSize);
-            //Array.Reverse(decompressedSizeArray);
+            
             finalYAZ0Block.AddRange(decompressedSizeArray);
 
             //add 8 0's per format specification
@@ -391,9 +378,9 @@ namespace Hack.io.YAZ0
             return finalYAZ0Block.ToArray();
         }
 
-        private static byte[] Decomp(Stream YAZ0)
+        private static byte[] Decomp(byte[] Data)
         {
-            YAZ0.Position = 0;
+            MemoryStream YAZ0 = new MemoryStream(Data);
             if (YAZ0.ReadString(4) != Magic)
                 throw new Exception($"Invalid Identifier. Expected \"{Magic}\"");
 

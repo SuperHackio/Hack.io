@@ -719,18 +719,18 @@ namespace Hack.io.BTK
         /// Cast a BTK to a RARCFile
         /// </summary>
         /// <param name="x"></param>
-        public static implicit operator RARC.RARCFile(BTK x)
+        public static implicit operator RARC.RARC.File(BTK x)
         {
-            return new RARC.RARCFile() { FileData = x.Save().GetBuffer(), Name = x.Name };
+            return new RARC.RARC.File(x.Name, x.Save());
         }
 
         /// <summary>
         /// Cast a RARCFile to a BTK
         /// </summary>
         /// <param name="x"></param>
-        public static implicit operator BTK(RARC.RARCFile x)
+        public static implicit operator BTK(RARC.RARC.File x)
         {
-            return new BTK(x.GetMemoryStream(), x.Name);
+            return new BTK((MemoryStream)x, x.Name);
         }
 
         //=====================================================================

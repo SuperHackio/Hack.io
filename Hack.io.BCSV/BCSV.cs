@@ -440,19 +440,13 @@ namespace Hack.io.BCSV
         /// Cast a BCSV to a RARCFile
         /// </summary>
         /// <param name="x"></param>
-        public static implicit operator RARC.RARCFile(BCSV x)
-        {
-            return new RARC.RARCFile() { FileData = x.Save().GetBuffer(), Name = x.FileName };
-        }
+        public static implicit operator RARC.RARC.File(BCSV x) => new RARC.RARC.File(x.FileName, x.Save());
 
         /// <summary>
         /// Cast a RARCFile to a BCSV
         /// </summary>
         /// <param name="x"></param>
-        public static implicit operator BCSV(RARC.RARCFile x)
-        {
-            return new BCSV(x.GetMemoryStream()) { FileName = x.Name };
-        }
+        public static implicit operator BCSV(RARC.RARC.File x) => new BCSV((MemoryStream)x) { FileName = x.Name };
 
         //=====================================================================
     }

@@ -313,18 +313,18 @@ namespace Hack.io.BVA
         /// Cast a BVA to a RARCFile
         /// </summary>
         /// <param name="x"></param>
-        public static implicit operator RARC.RARCFile(BVA x)
+        public static implicit operator RARC.RARC.File(BVA x)
         {
-            return new RARC.RARCFile() { FileData = x.Save().GetBuffer(), Name = x.Name };
+            return new RARC.RARC.File(x.Name, x.Save());
         }
 
         /// <summary>
         /// Cast a RARCFile to a BVA
         /// </summary>
         /// <param name="x"></param>
-        public static implicit operator BVA(RARC.RARCFile x)
+        public static implicit operator BVA(RARC.RARC.File x)
         {
-            return new BVA(x.GetMemoryStream());
+            return new BVA((MemoryStream)x);
         }
 
         //=====================================================================

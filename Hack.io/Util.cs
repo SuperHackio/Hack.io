@@ -74,7 +74,7 @@ namespace Hack.io.Util
     public static class ListEx
     {
         /// <summary>
-        /// Finds a sequence in a list
+        /// Finds out if a sequence exists in a list
         /// </summary>
         /// <typeparam name="T"></typeparam>
         /// <param name="sequence"></param>
@@ -82,7 +82,7 @@ namespace Hack.io.Util
         /// <returns></returns>
         public static bool ContainsSubsequence<T>(this IList<T> sequence, IList<T> subsequence)
         {
-            if (sequence.Count == 0)
+            if (sequence.Count == 0 || subsequence.Count > sequence.Count)
                 return false;
             var yee = Enumerable.Range(0, sequence.Count - subsequence.Count + 1).Any(n => sequence.Skip(n).Take(subsequence.Count).SequenceEqual(subsequence));
             return yee;
@@ -92,8 +92,8 @@ namespace Hack.io.Util
         /// </summary>
         /// <typeparam name="T"></typeparam>
         /// <param name="list"></param>
-        /// <param name="start"></param>
-        /// <param name="sublist"></param>
+        /// <param name="start">The index to Start searching from</param>
+        /// <param name="sublist">The list to find</param>
         /// <returns></returns>
         public static int SubListIndex<T>(this IList<T> list, int start, IList<T> sublist)
         {
