@@ -40,6 +40,9 @@ Revolution (Wii) Archives. (SMG/SMG2, SMS)<br/>
 - **Hack.IO.YAZ0**<br/>
 Library for Compressing/Decompressing data to/from YAZ0. Works with pretty much anything
 
+- **Hack.IO.YAY0**<br/>
+Library for Compressing/Decompressing data to/from YAY0. Works with pretty much anything
+
 ## How to use
 Download the Libraries you want and then reference them in your program's Assembly References.<br/>
 Using statements will also be needed. The statements are identical to the library name.<br/>
@@ -52,5 +55,7 @@ For Library specific tutorials, please visit it's corresponding Wiki Page.
 - Super Hackio - Main Programmer/Maintainer
 - RenolY2 aka Yoshi2 - Code reference for Hack.io.BTK & Hack.io.BRK
 - NoClip.website - Code reference for Hack.io.BCK, Hack.io.BTP, Hack.io.BVA & Hack.io.BPK
+- tarsa129 - Code reference for Hack.io.BCK because NoClip wasn't enough
 - Old SMG Researchers - File formats for Hack.io.CANM, Hack.io.BCSV & Hack.io.RARC
-- Gericom - Quick YAZ0 compression
+- Gericom - Quick YAZ0 Compression
+- Daniel-McCarthy - YAY0 and YAZ0 Compression
