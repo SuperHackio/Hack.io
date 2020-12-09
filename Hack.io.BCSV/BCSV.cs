@@ -299,9 +299,7 @@ namespace Hack.io.BCSV
             }
             return ret;
         }
-
-
-
+        
         //public int InsertAndCombine(int StartingValue, int AddingValue, out uint Mask, out byte ShiftVal)
         //{
         //    Mask = 0;
@@ -549,6 +547,16 @@ namespace Hack.io.BCSV
         /// Create an empty BCSV Entry
         /// </summary>
         public BCSVEntry() => Data = new Dictionary<uint, object>();
+        /// <summary>
+        /// Create a new entry with the provided Dictionary of fields
+        /// </summary>
+        /// <param name="FieldSource">The dictionary of fields</param>
+        public BCSVEntry(Dictionary<uint, BCSVField> FieldSource)
+        {
+            Data = new Dictionary<uint, object>();
+            foreach (KeyValuePair<uint, BCSVField> field in FieldSource)
+                Data.Add(field.Key, field.Value.GetDefaultValue());
+        }
         internal BCSVEntry(Stream BCSV, Dictionary<uint, BCSVField> fields, long StringOffset)
         {
             long EntryStartPosition = BCSV.Position;
@@ -652,6 +660,22 @@ namespace Hack.io.BCSV
             BCSV.Position = OriginalPosition + DataLength;
         }
 
+        /// <summary>
+        /// Shortcut to Data[hash]
+        /// </summary>
+        /// <param name="hash">The hash to get</param>
+        /// <returns></returns>
+        public object this[uint hash]
+        {
+            get { return Data[hash]; }
+            set
+            {
+                if (!(value is int) && !(value is float) && !(value is uint) && !(value is short) && !(value is byte) && !(value is string))
+                    throw new Exception($"The provided object is not supported by BCSV. Value is of type \"{value.GetType().ToString()}\"");
+                Data[hash] = value;
+            }
+        }
+
         internal void FillMissingFields(Dictionary<uint, BCSVField> fields)
         {
             for (int i = 0; i < fields.Count; i++)
@@ -748,7 +772,6 @@ namespace Hack.io.BCSV
         /// </summary>
         /// <returns></returns>
         public override int GetHashCode() => -301143667 + EqualityComparer<Dictionary<uint, object>>.Default.GetHashCode(Data);
-
     }
     /// <summary>
     /// BCSVField Data Types

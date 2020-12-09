@@ -210,4 +210,128 @@ namespace Hack.io.Util
             return Finalarray[0];
         }
     }
+    /// <summary>
+    /// Extra BitConverter functions
+    /// </summary>
+    public static class BitConverterEx
+    {
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="value"></param>
+        /// <param name="StartIndex"></param>
+        /// <returns></returns>
+        public static Int24 ToInt24(byte[] value, int StartIndex) => new Int24(value[StartIndex] | value[StartIndex + 1] << 8 | value[StartIndex + 2] << 16);
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="value"></param>
+        /// <returns></returns>
+        public static byte[] GetBytes(Int24 value) => new byte[3] { (byte)value.Value, (byte)(value.Value >> 8), (byte)(value.Value >> 16) };
+        
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="value"></param>
+        /// <param name="StartIndex"></param>
+        /// <returns></returns>
+        public static UInt24 ToUInt24(byte[] value, int StartIndex) => new UInt24((uint)(value[StartIndex] | value[StartIndex + 1] << 8 | value[StartIndex + 2] << 16));
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="value"></param>
+        /// <returns></returns>
+        public static byte[] GetBytes(UInt24 value) => new byte[3] { (byte)value.Value, (byte)(value.Value >> 8), (byte)(value.Value >> 16) };
+    }
+    /// <summary>
+    /// 
+    /// </summary>
+    public static class Benchmark
+    {
+        private static DateTime startDate = DateTime.MinValue;
+        private static DateTime endDate = DateTime.MinValue;
+        /// <summary>
+        /// 
+        /// </summary>
+        public static TimeSpan Span => endDate.Subtract(startDate);
+        /// <summary>
+        /// Starts the timer
+        /// </summary>
+        public static void Start() => startDate = DateTime.Now;
+        /// <summary>
+        /// Ends the Timer
+        /// </summary>
+        public static void End() => endDate = DateTime.Now;
+        /// <summary>
+        /// Gets the elapsed seconds
+        /// </summary>
+        /// <returns></returns>
+        public static double GetSeconds() => endDate == DateTime.MinValue ? 0.0 : Span.TotalSeconds;
+    }
+    /// <summary>
+    /// Class full of odds and ends that don't belong to a certain group
+    /// </summary>
+    public static class GenericExtensions
+    {
+        /// <summary>
+        /// Swaps two values.
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="Left">Our first contestant</param>
+        /// <param name="Right">Our second contestant</param>
+        public static void SwapValues<T>(ref T Left, ref T Right)
+        {
+            T temp = Left;
+            Left = Right;
+            Right = temp;
+        }
+        /// <summary>
+        /// Swaps two values using a Tuple
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="Values">The tuple to swap values of</param>
+        public static void SwapValues<T>(ref Tuple<T, T> Values) => Values = new Tuple<T, T>(Values.Item2, Values.Item1);
+        /// <summary>
+        /// Cycles an set of objects. Can be cycled backwards
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="Reverse">If true, cycles from left to right instead of right to left</param>
+        /// <param name="Values">The values to cycle</param>
+        public static void CycleValues<T>(bool Reverse = false, params T[] Values)
+        {
+            T temp;
+            if (Reverse)
+            {
+                temp = Values[Values.Length - 1];
+                for (int i = Values.Length - 1; i >= 1; i--)
+                    Values[i + 1] = Values[i];
+                Values[0] = temp;
+            }
+            else
+            {
+                temp = Values[0];
+                for (int i = 1; i < Values.Length; i++)
+                    Values[i - 1] = Values[i];
+                Values[Values.Length - 1] = temp;
+            }
+        }
+        /// <summary>
+        /// Math.Clamp doesn't exist for whatever reason
+        /// </summary>
+        /// <param name="value">The value to clamp</param>
+        /// <param name="min">The Minimum value</param>
+        /// <param name="max">The Maximum value</param>
+        /// <returns></returns>
+        public static T Clamp<T>(T value, T max, T min) where T : IComparable<T>
+        {
+            T result = value;
+            if (value.CompareTo(max) > 0)
+                result = max;
+            if (value.CompareTo(min) < 0)
+                result = min;
+            return result;
+        }
+    }
 }

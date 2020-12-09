@@ -5,6 +5,7 @@ using System.Text;
 using System.IO;
 using System.Linq;
 using System.Threading;
+using System.Drawing;
 
 namespace Hack.io
 {
@@ -570,6 +571,46 @@ namespace Hack.io
             byte[] Write = Encoding.GetEncoding(932).GetBytes(String);
             FS.Write(Write, 0, Write.Length);
             FS.WriteByte(Terminator);
+        }
+        /// <summary>
+        /// Writes a Colour to a stream
+        /// </summary>
+        [DebuggerStepThrough]
+        public static void WriteColour(this Stream FS, Color Col, string ColourOrder = "RGBA")
+        {
+            ColourOrder = ColourOrder.ToUpper();
+            for (int i = 0; i < ColourOrder.Length; i++)
+            {
+                switch (ColourOrder[i])
+                {
+                    case 'R':
+                        FS.WriteByte(Col.R);
+                        break;
+                    case 'G':
+                        FS.WriteByte(Col.G);
+                        break;
+                    case 'B':
+                        FS.WriteByte(Col.B);
+                        break;
+                    case 'A':
+                        FS.WriteByte(Col.A);
+                        break;
+                    default:
+                        break;
+                }
+            }
+        }
+        /// <summary>
+        /// Adds Padding to the Current Position in the provided Stream
+        /// </summary>
+        /// <param name="FS">The Stream to add padding to</param>
+        /// <param name="Multiple">The byte multiple to pad to</param>
+        /// <param name="Padding">The byte multiple to pad to</param>
+        [DebuggerStepThrough]
+        public static void PadTo(this Stream FS, int Multiple, byte Padding = 0x00)
+        {
+            while (FS.Position % Multiple != 0)
+                FS.WriteByte(Padding);
         }
         /// <summary>
         /// Reads a char from the file.

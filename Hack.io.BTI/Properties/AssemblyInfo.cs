@@ -5,12 +5,12 @@ using System.Runtime.InteropServices;
 // General Information about an assembly is controlled through the following
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
-[assembly: AssemblyTitle("Hack.io.YAZ0")]
-[assembly: AssemblyDescription("IO Library for Compressing and Decompressing YAZ0 files")]
+[assembly: AssemblyTitle("Hack.io.BTI")]
+[assembly: AssemblyDescription("")]
 [assembly: AssemblyConfiguration("")]
-[assembly: AssemblyCompany("Super Hackio Incorporated")]
-[assembly: AssemblyProduct("Hack.io.YAZ0")]
-[assembly: AssemblyCopyright("Copyright © Super Hackio Incorporated 2019-2020")]
+[assembly: AssemblyCompany("")]
+[assembly: AssemblyProduct("Hack.io.BTI")]
+[assembly: AssemblyCopyright("Copyright ©  2020")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 
@@ -20,7 +20,7 @@ using System.Runtime.InteropServices;
 [assembly: ComVisible(false)]
 
 // The following GUID is for the ID of the typelib if this project is exposed to COM
-[assembly: Guid("bdda5ade-2d88-483d-854c-d295ed9f8089")]
+[assembly: Guid("524ff91a-b5f3-4ef8-9216-eb4128ded242")]
 
 // Version information for an assembly consists of the following four values:
 //
@@ -32,5 +32,5 @@ using System.Runtime.InteropServices;
 // You can specify all the values or you can default the Build and Revision Numbers
 // by using the '*' as shown below:
 // [assembly: AssemblyVersion("1.0.*")]
-[assembly: AssemblyVersion("1.2.0.0")]
-[assembly: AssemblyFileVersion("1.2.0.0")]
+[assembly: AssemblyVersion("1.0.0.0")]
+[assembly: AssemblyFileVersion("1.0.0.0")]

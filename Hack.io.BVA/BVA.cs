@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using static Hack.io.J3D.J3DGraph;
 
 namespace Hack.io.BVA
 {
@@ -18,7 +19,7 @@ namespace Hack.io.BVA
         /// <summary>
         /// Loop Mode of the BRK animation. See the <seealso cref="LoopMode"/> enum for values
         /// </summary>
-        public LoopMode Loop { get; set; } = LoopMode.Once;
+        public LoopMode Loop { get; set; } = LoopMode.ONCE;
         /// <summary>
         /// Length of the animation in Frames. (Game Framerate = 1 second)
         /// <para/>Set during the saving process
@@ -83,33 +84,6 @@ namespace Hack.io.BVA
         /// </summary>
         /// <returns></returns>
         public override string ToString() => $"{new FileInfo(Name).Name} {(VisibilityAnimations.Count > 0 ? $"[{VisibilityAnimations.Count} Visibility Animation{(VisibilityAnimations.Count > 1 ? "s" : "")}] " : "")}";
-
-        /// <summary>
-        /// BTK Looping Modes
-        /// </summary>
-        public enum LoopMode : byte
-        {
-            /// <summary>
-            /// Play Once then Stop
-            /// </summary>
-            Default = 0x00,
-            /// <summary>
-            /// Play Once then Stop
-            /// </summary>
-            Once = 0x01,
-            /// <summary>
-            /// Constantly play the animation
-            /// </summary>
-            Loop = 0x02,
-            /// <summary>
-            /// Play the animation to the end. then reverse the animation and play to the start, then Stop
-            /// </summary>
-            OnceAndReverse = 0x03,
-            /// <summary>
-            /// Play the animation to the end. then reverse the animation and play to the start, Looped
-            /// </summary>
-            OnceAndReverseLoop = 0x04
-        }
 
         /// <summary>
         /// Animation Container
