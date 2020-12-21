@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
+using System.Linq;
 using static Hack.io.J3D.JUtility;
 
 namespace Hack.io.BTI
@@ -220,7 +221,7 @@ namespace Hack.io.BTI
         {
             List<byte> ImageData = new List<byte>();
             List<byte> PaletteData = new List<byte>();
-            GetImageAndPaletteData(ref ImageData, ref PaletteData, mipmaps, Format, PaletteFormat);
+            GetImageAndPaletteData(ref ImageData, ref PaletteData, mipmaps, Format, PaletteFormat, AlphaSetting);
             long HeaderStart = BTIFile.Position;
             int ImageDataStart = (int)((DataOffset + PaletteData.Count) - HeaderStart), PaletteDataStart = (int)(DataOffset - HeaderStart);
             BTIFile.WriteByte((byte)Format);
@@ -260,6 +261,66 @@ namespace Hack.io.BTI
             DataOffset = BTIFile.Position;
             BTIFile.Position = Pauseposition;
         }
-    }
 
+        public override string ToString() => $"{FileName} - {mipmaps.Count} Image(s)";
+
+        public bool ImageEquals(BTI Other)
+        {
+            if (mipmaps.Count != Other.mipmaps.Count)
+                return false;
+            for (int i = 0; i < mipmaps.Count; i++)
+            {
+                if (!Compare(mipmaps[i], Other.mipmaps[i]))
+                    return false;
+            }
+
+            return true;
+        }
+        public override bool Equals(object obj)
+        {
+            return obj is BTI bTI && bTI != null &&
+                   FileName == bTI.FileName &&
+                   mipmaps.SequenceEqual(bTI.mipmaps) &&
+                   Format == bTI.Format &&
+                   PaletteFormat == bTI.PaletteFormat &&
+                   AlphaSetting == bTI.AlphaSetting &&
+                   WrapS == bTI.WrapS &&
+                   WrapT == bTI.WrapT &&
+                   MagnificationFilter == bTI.MagnificationFilter &&
+                   MinificationFilter == bTI.MinificationFilter &&
+                   MinLOD == bTI.MinLOD &&
+                   MaxLOD == bTI.MaxLOD &&
+                   EnableEdgeLOD == bTI.EnableEdgeLOD &&
+                   LODBias == bTI.LODBias &&
+                   ClampLODBias == bTI.ClampLODBias &&
+                   MaxAnisotropy == bTI.MaxAnisotropy &&
+                   ImageCount == bTI.ImageCount;
+        }
+
+        public override int GetHashCode()
+        {
+            var hashCode = 647188357;
+            hashCode = hashCode * -1521134295 + EqualityComparer<string>.Default.GetHashCode(FileName);
+            hashCode = hashCode * -1521134295 + EqualityComparer<List<Bitmap>>.Default.GetHashCode(mipmaps);
+            hashCode = hashCode * -1521134295 + Format.GetHashCode();
+            hashCode = hashCode * -1521134295 + PaletteFormat.GetHashCode();
+            hashCode = hashCode * -1521134295 + AlphaSetting.GetHashCode();
+            hashCode = hashCode * -1521134295 + WrapS.GetHashCode();
+            hashCode = hashCode * -1521134295 + WrapT.GetHashCode();
+            hashCode = hashCode * -1521134295 + MagnificationFilter.GetHashCode();
+            hashCode = hashCode * -1521134295 + MinificationFilter.GetHashCode();
+            hashCode = hashCode * -1521134295 + MinLOD.GetHashCode();
+            hashCode = hashCode * -1521134295 + MaxLOD.GetHashCode();
+            hashCode = hashCode * -1521134295 + EnableEdgeLOD.GetHashCode();
+            hashCode = hashCode * -1521134295 + LODBias.GetHashCode();
+            hashCode = hashCode * -1521134295 + ClampLODBias.GetHashCode();
+            hashCode = hashCode * -1521134295 + MaxAnisotropy.GetHashCode();
+            hashCode = hashCode * -1521134295 + ImageCount.GetHashCode();
+            return hashCode;
+        }
+
+        public static bool operator ==(BTI bTI1, BTI bTI2) => bTI1.Equals(bTI2);
+
+        public static bool operator !=(BTI bTI1, BTI bTI2) => !(bTI1 == bTI2);
+    }
 }

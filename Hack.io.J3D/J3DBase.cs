@@ -393,7 +393,7 @@ namespace Hack.io.J3D
             else
             {
                 InterpA = Color.FromArgb((int)Math.Floor(Left.R / 2.0) + (int)Math.Floor(Right.R / 2.0), (int)Math.Floor(Left.G / 2.0) + (int)Math.Floor(Right.G / 2.0), (int)Math.Floor(Left.B / 2.0) + (int)Math.Floor(Right.B / 2.0));
-                InterpB = Color.Black;
+                InterpB = Color.FromArgb(1, (int)Math.Floor((1 * Left.R + 2 * Right.R) / 3.0), (int)Math.Floor((1 * Left.G + 2 * Right.G) / 3.0), (int)Math.Floor((1 * Left.B + 2 * Right.B) / 3.0));
             }
 
             return new Color[4] { Left, Right, InterpA, InterpB };
@@ -419,21 +419,21 @@ namespace Hack.io.J3D
             return oldHeight % 8 != 0 ? (oldHeight / 8) * 8 + 8 : oldHeight;
         }
 
-        public static void GetImageAndPaletteData(ref List<byte> ImageData, ref List<byte> PaletteData, List<Bitmap> Images, GXImageFormat Format, GXPaletteFormat PaletteFormat)
+        public static void GetImageAndPaletteData(ref List<byte> ImageData, ref List<byte> PaletteData, List<Bitmap> Images, GXImageFormat Format, GXPaletteFormat PaletteFormat, JUTTransparency AlphaMode)
         {
             Tuple<Dictionary<Color, int>, ushort[]> Palette = CreatePalette(Images, Format, PaletteFormat);
             PaletteData = EncodePalette(Palette.Item2, Format).ToList();
             for (int i = 0; i < Images.Count; i++)
-                EncodeImage(ref ImageData, Images[i], Format, Palette.Item1);
+                EncodeImage(ref ImageData, Images[i], Format, Palette.Item1, AlphaMode);
         }
 
-        public static void EncodeImage(ref List<byte> ImageData, Bitmap Image, GXImageFormat Format, Dictionary<Color, int> ColourIndicies)
+        public static void EncodeImage(ref List<byte> ImageData, Bitmap Image, GXImageFormat Format, Dictionary<Color, int> ColourIndicies, JUTTransparency AlphaMode)
         {
             int block_x = 0, block_y = 0;
 
             while (block_y < Image.Height)
             {
-                byte[] block_data = EncodeBlock(Format, Image, ColourIndicies, block_x, block_y);
+                byte[] block_data = EncodeBlock(Format, Image, ColourIndicies, block_x, block_y, AlphaMode);
 
                 ImageData.AddRange(block_data);
 
@@ -499,7 +499,7 @@ namespace Hack.io.J3D
             return new Tuple<Dictionary<Color, int>, ushort[]>(colors_to_color_indexes, encoded_colors.ToArray());
         }
 
-        public static byte[] EncodeBlock(GXImageFormat Format, Bitmap Image, Dictionary<Color, int> ColourIndicies, int BlockX, int BlockY)
+        public static byte[] EncodeBlock(GXImageFormat Format, Bitmap Image, Dictionary<Color, int> ColourIndicies, int BlockX, int BlockY, JUTTransparency AlphaMode)
         {
             byte[] Pixels = Image.ToByteArray();
             byte[] EncodedBlock = new byte[Format == GXImageFormat.RGBA32 ? 64 : 32];
@@ -573,7 +573,7 @@ namespace Hack.io.J3D
                     #region Encode IA8
                     for (int y = BlockY; y < BlockY + CurrentBlockHeight; y++)
                     {
-                        for (int x = BlockX; x < BlockX + CurrentBlockWidth; x += 2)
+                        for (int x = BlockX; x < BlockX + CurrentBlockWidth; x++)
                         {
                             if (x >= Image.Width || y >= Image.Height)
                                 Value = new byte[2] { 0xFF, 0xFF }; //Block Bleeds past image width
@@ -592,7 +592,7 @@ namespace Hack.io.J3D
                     #region Encode RGB565
                     for (int y = BlockY; y < BlockY + CurrentBlockHeight; y++)
                     {
-                        for (int x = BlockX; x < BlockX + CurrentBlockWidth; x += 2)
+                        for (int x = BlockX; x < BlockX + CurrentBlockWidth; x++)
                         {
                             if (x >= Image.Width || y >= Image.Height)
                                 Value = new byte[2] { 0xFF, 0xFF }; //Block Bleeds past image width
@@ -611,7 +611,7 @@ namespace Hack.io.J3D
                     #region Encode RGB5A3
                     for (int y = BlockY; y < BlockY + CurrentBlockHeight; y++)
                     {
-                        for (int x = BlockX; x < BlockX + CurrentBlockWidth; x += 2)
+                        for (int x = BlockX; x < BlockX + CurrentBlockWidth; x ++)
                         {
                             if (x >= Image.Width || y >= Image.Height)
                                 Value = new byte[2] { 0xFF, 0xFF }; //Block Bleeds past image width
@@ -722,7 +722,7 @@ namespace Hack.io.J3D
 
                             PixelIndex = ((y * Image.Width) + x) * 4;
                             Color Col = Color.FromArgb(Pixels[PixelIndex + 3], Pixels[PixelIndex + 2], Pixels[PixelIndex + 1], Pixels[PixelIndex]);
-                            if (Col.A < 16)
+                            if (/*AlphaMode != JUTTransparency.SPECIAL &&*/ Col.A < 16)
                                 NeedsAlphaColor = true;
                             else
                                 AllSubBlockColours.Add(Col);
@@ -1280,7 +1280,11 @@ namespace Hack.io.J3D
             /// <summary>
             /// Allows Partial Transperancy. Also known as XLUCENT
             /// </summary>
-            TRANSLUCENT = 0x02
+            TRANSLUCENT = 0x02,
+            /// <summary>
+            /// Undefined
+            /// </summary>
+            SPECIAL = 0xCC
         }
         #endregion
     }
