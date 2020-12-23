@@ -71,13 +71,13 @@ namespace Hack.io.BTI
         }
         #endregion
 
+        internal BTI() { }
         public BTI(string filename)
         {
             FileStream BTIFile = new FileStream(filename, FileMode.Open);
             Read(BTIFile);
             BTIFile.Close();
         }
-
         public BTI(Stream memorystream) => Read(memorystream);
 
         public void Save(string filename)
@@ -87,7 +87,6 @@ namespace Hack.io.BTI
             Write(BTIFile, ref BaseDataOffset);
             BTIFile.Close();
         }
-
         public void Save(Stream BTIFile, ref long DataOffset) => Write(BTIFile, ref DataOffset);
 
         private void Read(Stream BTIFile)
@@ -216,7 +215,6 @@ namespace Hack.io.BTI
                 mipmaps.Add(Result);
             }
         }
-
         private void Write(Stream BTIFile, ref long DataOffset)
         {
             List<byte> ImageData = new List<byte>();
@@ -261,9 +259,7 @@ namespace Hack.io.BTI
             DataOffset = BTIFile.Position;
             BTIFile.Position = Pauseposition;
         }
-
-        public override string ToString() => $"{FileName} - {mipmaps.Count} Image(s)";
-
+        
         public bool ImageEquals(BTI Other)
         {
             if (mipmaps.Count != Other.mipmaps.Count)
@@ -276,6 +272,7 @@ namespace Hack.io.BTI
 
             return true;
         }
+        public override string ToString() => $"{FileName} - {mipmaps.Count} Image(s)";
         public override bool Equals(object obj)
         {
             return obj is BTI bTI && bTI != null &&
@@ -296,7 +293,6 @@ namespace Hack.io.BTI
                    MaxAnisotropy == bTI.MaxAnisotropy &&
                    ImageCount == bTI.ImageCount;
         }
-
         public override int GetHashCode()
         {
             var hashCode = 647188357;
@@ -318,9 +314,55 @@ namespace Hack.io.BTI
             hashCode = hashCode * -1521134295 + ImageCount.GetHashCode();
             return hashCode;
         }
-
         public static bool operator ==(BTI bTI1, BTI bTI2) => bTI1.Equals(bTI2);
-
         public static bool operator !=(BTI bTI1, BTI bTI2) => !(bTI1 == bTI2);
+
+        //=====================================================================
+
+        /// <summary>
+        /// Cast a RARCFile to a BTI
+        /// </summary>
+        /// <param name="x"></param>
+        public static implicit operator BTI(RARC.RARC.File x) => new BTI((MemoryStream)x) { FileName = x.Name };
+        /// <summary>
+        /// Cast a BTI to a RARCfile
+        /// </summary>
+        /// <param name="x"></param>
+        public static implicit operator RARC.RARC.File(BTI x)
+        {
+            MemoryStream MS = new MemoryStream();
+            long temp = 0;
+            x.Write(MS, ref temp);
+            return new RARC.RARC.File(x.FileName, MS);
+        }
+        /// <summary>
+        /// Cast a Bitmap to a BTI
+        /// </summary>
+        /// <param name="Source"></param>
+        public static explicit operator BTI(Bitmap Source)
+        {
+            BTI NewImage = new BTI { Format = GXImageFormat.CMPR };
+            NewImage.mipmaps.Add(Source);
+            return NewImage;
+        }
+        /// <summary>
+        /// Cast Bitmaps to a BTI
+        /// </summary>
+        /// <param name="Source"></param>
+        public static explicit operator BTI(Bitmap[] Source)
+        {
+            BTI NewImage = new BTI { Format = GXImageFormat.CMPR };
+            NewImage.mipmaps.Add(Source[0]);
+            for (int i = 1; i < Source.Length; i++)
+            {
+                if (Source[i].Width < 1 || Source[i].Height < 1)
+                    break;
+                if (Source[i].Width == Source[i - 1].Width / 2 && Source[i].Height == Source[i - 1].Height / 2)
+                    NewImage.mipmaps.Add(Source[i]);
+            }
+            return NewImage;
+        }
+
+        //=====================================================================
     }
 }
