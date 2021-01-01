@@ -32,7 +32,7 @@ namespace Hack.io.BCSV
         /// <param name="Filename">filepath</param>
         public BCSV(string Filename)
         {
-            FileStream fs = new FileStream(Filename, FileMode.Create);
+            FileStream fs = new FileStream(Filename, FileMode.Open);
             Read(fs);
             fs.Close();
             FileName = Filename;
@@ -605,46 +605,41 @@ namespace Hack.io.BCSV
 
         internal void Save(Stream BCSV, Dictionary<uint, BCSVField> fields, uint DataLength, List<string> Strings)
         {
-            BitArray flagvalue = new BitArray(new int[1]);
             long OriginalPosition = BCSV.Position;
             BCSV.Write(new byte[DataLength], 0, (int)DataLength);
-            for (int i = 0; i < fields.Count; i++)
+            foreach (KeyValuePair<uint, BCSVField> Field in fields)
             {
-                BCSV.Position = OriginalPosition + fields.ElementAt(i).Value.EntryOffset;
-                if (Data.ContainsKey(fields.ElementAt(i).Key))
+                BCSV.Position = OriginalPosition + Field.Value.EntryOffset;
+                if (Data.ContainsKey(Field.Key))
                 {
-                    switch (fields.ElementAt(i).Value.DataType)
+                    switch (Field.Value.DataType)
                     {
                         case DataTypes.INT32:
-                            if (fields.ElementAt(i).Value.Bitmask != 0xFFFFFFFF)
-                            {
-                                flagvalue[fields.ElementAt(i).Value.ShiftAmount] = (int)Data[fields.ElementAt(i).Key] == 1;
-                                int temp = flagvalue.ToInt32();
-                                BCSV.WriteReverse(BitConverter.GetBytes(temp), 0, 4);
-                            }
+                            if (Field.Value.Bitmask != 0xFFFFFFFF)
+                                BCSV.WriteReverse(BitConverter.GetBytes((int.Parse(Data[Field.Key].ToString()) << Field.Value.ShiftAmount) & (int)Field.Value.Bitmask), 0, 4);
                             else
-                                BCSV.WriteReverse(BitConverter.GetBytes(int.Parse(Data[fields.ElementAt(i).Key].ToString())), 0, 4);
+                                BCSV.WriteReverse(BitConverter.GetBytes(int.Parse(Data[Field.Key].ToString())), 0, 4);
                             break;
                         case DataTypes.UNKNOWN:
                             break;
                         case DataTypes.FLOAT:
-                            BCSV.WriteReverse(BitConverter.GetBytes((float)Data[fields.ElementAt(i).Key]), 0, 4);
+                            BCSV.WriteReverse(BitConverter.GetBytes((float)Data[Field.Key]), 0, 4);
                             break;
                         case DataTypes.UINT32:
-                            BCSV.WriteReverse(BitConverter.GetBytes((uint)Data[fields.ElementAt(i).Key]), 0, 4);
+                            BCSV.WriteReverse(BitConverter.GetBytes((uint)Data[Field.Key]), 0, 4);
                             break;
                         case DataTypes.INT16:
-                            BCSV.WriteReverse(BitConverter.GetBytes((short)Data[fields.ElementAt(i).Key]), 0, 2);
+                            BCSV.WriteReverse(BitConverter.GetBytes((short)Data[Field.Key]), 0, 2);
                             break;
                         case DataTypes.BYTE:
-                            BCSV.WriteReverse(BitConverter.GetBytes((byte)Data[fields.ElementAt(i).Key]), 0, 1);
+                            BCSV.WriteReverse(BitConverter.GetBytes((byte)Data[Field.Key]), 0, 1);
                             break;
                         case DataTypes.STRING:
                             Encoding enc = Encoding.GetEncoding(932);
                             uint StringOffset = 0;
                             for (int j = 0; j < Strings.Count; j++)
                             {
-                                if (Strings[j].Equals((string)Data[fields.ElementAt(i).Key]))
+                                if (Strings[j].Equals((string)Data[Field.Key]))
                                 {
                                     BCSV.WriteReverse(BitConverter.GetBytes(StringOffset), 0, 4);
                                     break;

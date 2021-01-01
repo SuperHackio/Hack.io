@@ -277,7 +277,7 @@ namespace Hack.io.BTI
         {
             return obj is BTI bTI && bTI != null &&
                    FileName == bTI.FileName &&
-                   mipmaps.SequenceEqual(bTI.mipmaps) &&
+                   ImageEquals(bTI) &&
                    Format == bTI.Format &&
                    PaletteFormat == bTI.PaletteFormat &&
                    AlphaSetting == bTI.AlphaSetting &&

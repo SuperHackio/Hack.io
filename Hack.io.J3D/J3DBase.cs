@@ -539,7 +539,7 @@ namespace Hack.io.J3D
                     #region Encode I8
                     for (int y = BlockY; y < BlockY + CurrentBlockHeight; y++)
                     {
-                        for (int x = BlockX; x < BlockX + CurrentBlockWidth; x += 2)
+                        for (int x = BlockX; x < BlockX + CurrentBlockWidth; x++)
                         {
                             if (x >= Image.Width || y >= Image.Height)
                                 EncodedBlock[Offset++] = 0xFF; //Block Bleeds past image width
