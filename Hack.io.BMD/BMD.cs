@@ -7197,5 +7197,17 @@ namespace Hack.io.BMD
             SETTEXMTX8 = 0x00D8,
             SETTEXMTX9 = 0x00E4
         }
+
+
+
+        //=====================================================================
+
+        /// <summary>
+        /// Cast a RARCFile to a BDL
+        /// </summary>
+        /// <param name="x"></param>
+        public static implicit operator BDL(RARC.RARC.File x) => new BDL((MemoryStream)x) { FileName = x.Name };
+
+        //=====================================================================
     }
 }
