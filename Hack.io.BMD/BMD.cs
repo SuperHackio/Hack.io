@@ -1705,6 +1705,12 @@ namespace Hack.io.BMD
         {
             public List<Shape> Shapes { get; private set; } = new List<Shape>();
             public List<int> RemapTable { get; private set; } = new List<int>();
+            /// <summary>
+            /// Get a shape with respect to the Remap table
+            /// </summary>
+            /// <param name="Index"></param>
+            /// <returns></returns>
+            public Shape this[int Index] { get => Shapes[RemapTable[Index]]; }
 
             private static readonly string Magic = "SHP1";
 
