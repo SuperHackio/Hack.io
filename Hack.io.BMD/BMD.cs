@@ -45,6 +45,7 @@ namespace Hack.io.BMD
             FS.Close();
             return result;
         }
+        public static bool CheckFile(Stream BMD) => BMD.ReadString(8).Equals(Magic);
 
         public virtual void Save(string Filename)
         {
