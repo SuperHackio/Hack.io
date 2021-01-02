@@ -1027,6 +1027,14 @@ namespace Hack.io.BMD
                     Attributes.SetAttributeData(GXVertexAttribute.Tex7, NewTexCoord7.Values.ToList());
             }
 
+            public Dictionary<GXVertexAttribute, object> this[BMD.SHP1.Vertex IndexProvider]
+            {
+                get
+                {
+                    return Attributes.FetchDataForShapeVertex(IndexProvider);
+                }
+            }
+
             public class VertexData
             {
                 private List<GXVertexAttribute> m_Attributes = new List<GXVertexAttribute>();
@@ -1169,6 +1177,56 @@ namespace Hack.io.BMD
                 public void SetAttributesFromList(List<GXVertexAttribute> attributes)
                 {
                     m_Attributes = new List<GXVertexAttribute>(attributes);
+                }
+
+                internal Dictionary<GXVertexAttribute, object> FetchDataForShapeVertex(SHP1.Vertex Source)
+                {
+                    Dictionary<GXVertexAttribute, object> Values = new Dictionary<GXVertexAttribute, object>();
+                    foreach (GXVertexAttribute Attribute in m_Attributes)
+                    {
+                        switch (Attribute)
+                        {
+                            case GXVertexAttribute.Position:
+                                Values.Add(Attribute, Positions[(int)Source.PositionIndex]);
+                                break;
+                            case GXVertexAttribute.Normal:
+                                Values.Add(Attribute, Normals[(int)Source.NormalIndex]);
+                                break;
+                            case GXVertexAttribute.Color0:
+                                Values.Add(Attribute, Color_0[(int)Source.Color0Index]);
+                                break;
+                            case GXVertexAttribute.Color1:
+                                Values.Add(Attribute, Color_1[(int)Source.Color1Index]);
+                                break;
+                            case GXVertexAttribute.Tex0:
+                                Values.Add(Attribute, TexCoord_0[(int)Source.TexCoord0Index]);
+                                break;
+                            case GXVertexAttribute.Tex1:
+                                Values.Add(Attribute, TexCoord_1[(int)Source.TexCoord1Index]);
+                                break;
+                            case GXVertexAttribute.Tex2:
+                                Values.Add(Attribute, TexCoord_2[(int)Source.TexCoord2Index]);
+                                break;
+                            case GXVertexAttribute.Tex3:
+                                Values.Add(Attribute, TexCoord_3[(int)Source.TexCoord3Index]);
+                                break;
+                            case GXVertexAttribute.Tex4:
+                                Values.Add(Attribute, TexCoord_4[(int)Source.TexCoord4Index]);
+                                break;
+                            case GXVertexAttribute.Tex5:
+                                Values.Add(Attribute, TexCoord_5[(int)Source.TexCoord5Index]);
+                                break;
+                            case GXVertexAttribute.Tex6:
+                                Values.Add(Attribute, TexCoord_6[(int)Source.TexCoord6Index]);
+                                break;
+                            case GXVertexAttribute.Tex7:
+                                Values.Add(Attribute, TexCoord_7[(int)Source.TexCoord7Index]);
+                                break;
+                            default:
+                                throw new ArgumentException("attribute");
+                        }
+                    }
+                    return Values;
                 }
             }
         }
