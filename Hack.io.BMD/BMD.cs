@@ -1358,7 +1358,7 @@ namespace Hack.io.BMD
                 writer.Write(new byte[4] { 0xDD, 0xDD, 0xDD, 0xDD }, 0, 4); // Placeholder for inverse bind matrix data offset
 
                 foreach (Weight w in Weights)
-                    writer.WriteByte((byte)w.WeightCount);
+                    writer.WriteByte((byte)w.Count);
 
                 foreach (Weight w in Weights)
                 {
@@ -1420,23 +1420,20 @@ namespace Hack.io.BMD
 
             public class Weight
             {
-                public int WeightCount { get; private set; }
                 public List<float> Weights { get; private set; }
                 public List<int> BoneIndices { get; private set; }
-                public Matrix4 FinalTransformation { get; private set; }
+                public int Count { get => Weights.Count; }
 
                 public Weight()
                 {
                     Weights = new List<float>();
                     BoneIndices = new List<int>();
-                    FinalTransformation = Matrix4.Zero;
                 }
 
                 public void AddWeight(float weight, int boneIndex)
                 {
                     Weights.Add(weight);
                     BoneIndices.Add(boneIndex);
-                    WeightCount++;
                 }
             }
 
