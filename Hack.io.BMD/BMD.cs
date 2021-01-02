@@ -244,6 +244,53 @@ namespace Hack.io.BMD
                 }
             }
 
+            public int FetchMaterialIndex(int ShapeID)
+            {
+                return Search(Root, ShapeID, NodeType.Shape, NodeType.Material);
+            }
+
+            private int Search(Node Root, int Index, NodeType IndexType, NodeType SearchType)
+            {
+                if (Root.Type == IndexType && Root.Index == Index)
+                {
+                    switch (IndexType)
+                    {
+                        case NodeType.Joint:
+                            break;
+                        case NodeType.Material:
+                            break;
+                        case NodeType.Shape:
+                            switch (SearchType)
+                            {
+                                case NodeType.Joint:
+                                    break;
+                                case NodeType.Material:
+                                    return Root.Parent.Index;
+                                case NodeType.Shape:
+                                    break;
+                                default:
+                                    throw new Exception("Bruh Moment!!");
+                            }
+                            break;
+                        default:
+                            throw new Exception("Bruh Moment!!");
+                    }
+                    return -1;
+                }
+                else if (Root.Children.Count > 0)
+                {
+                    for (int i = 0; i < Root.Children.Count; i++)
+                    {
+                        int value = Search(Root.Children[i], Index, IndexType, SearchType);
+                        if (value != -1)
+                            return value;
+                    }
+                    return -1;
+                }
+                else
+                    return -1;
+            }
+
             public enum J3DLoadFlags
             {
                 // Scaling rule
