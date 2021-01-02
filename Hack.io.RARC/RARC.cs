@@ -128,7 +128,7 @@ namespace Hack.io.RARC
         {
             if (Path.ToLower().StartsWith(Root.Name.ToLower() + "/"))
                 Path = Path.Substring(Root.Name.Length + 1);
-            return Root.GetItemKeyFromNoCase(Path);
+            return Root.GetItemKeyFromNoCase(Path, true);
         }
         /// <summary>
         /// Clears all the files out of this archive
@@ -394,7 +394,7 @@ namespace Hack.io.RARC
             /// </summary>
             /// <param name="Path">The Path to take</param>
             /// <returns></returns>
-            internal object this[string Path]
+            public object this[string Path]
             {
                 get
                 {
@@ -469,8 +469,9 @@ namespace Hack.io.RARC
             /// 
             /// </summary>
             /// <param name="Path"></param>
+            /// <param name="AttachRootName"></param>
             /// <returns></returns>
-            public string GetItemKeyFromNoCase(string Path)
+            public string GetItemKeyFromNoCase(string Path, bool AttachRootName = false)
             {
                 string[] PathSplit = Path.Split('/');
                 if (PathSplit.Length > 1)
@@ -479,15 +480,15 @@ namespace Hack.io.RARC
                     if (result == null)
                         return null;
                     else
-                        result = ((Directory)Items[result]).GetItemKeyFromNoCase(Path.Substring(PathSplit[0].Length + 1));
-                    return result == null ? null : Name+"/"+result;
+                        result = ((Directory)Items[result]).GetItemKeyFromNoCase(Path.Substring(PathSplit[0].Length + 1), true);
+                    return result == null ? null : (AttachRootName ? Name + "/" : "") + result;
                 }
                 else if (PathSplit.Length > 1)
                     return null;
                 else
                 {
                     string result = Items.FirstOrDefault(x => string.Equals(x.Key, PathSplit[0], StringComparison.OrdinalIgnoreCase)).Key;
-                    return result == null ? null : Name + "/" + result;
+                    return result == null ? null : (AttachRootName ? Name + "/" : "") + result;
                 }
             }
             /// <summary>
