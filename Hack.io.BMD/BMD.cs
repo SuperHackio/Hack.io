@@ -6782,6 +6782,27 @@ namespace Hack.io.BMD
             TriangleFan = 0xA0,
             Quads = 0x80,
         }
+        public static OpenTK.Graphics.OpenGL.PrimitiveType FromGXToOpenTK(GXPrimitiveType Type)
+        {
+            switch (Type)
+            {
+                case GXPrimitiveType.Points:
+                    return OpenTK.Graphics.OpenGL.PrimitiveType.Points;
+                case GXPrimitiveType.Lines:
+                    return OpenTK.Graphics.OpenGL.PrimitiveType.Lines;
+                case GXPrimitiveType.LineStrip:
+                    return OpenTK.Graphics.OpenGL.PrimitiveType.LineStrip;
+                case GXPrimitiveType.Triangles:
+                    return OpenTK.Graphics.OpenGL.PrimitiveType.Triangles;
+                case GXPrimitiveType.TriangleStrip:
+                    return OpenTK.Graphics.OpenGL.PrimitiveType.TriangleStrip;
+                case GXPrimitiveType.TriangleFan:
+                    return OpenTK.Graphics.OpenGL.PrimitiveType.TriangleFan;
+                case GXPrimitiveType.Quads:
+                    return OpenTK.Graphics.OpenGL.PrimitiveType.Quads;
+            }
+            throw new Exception("Bruh moment!!");
+        }
 
         //=====================================================================
 
