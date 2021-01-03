@@ -1074,7 +1074,7 @@ namespace Hack.io.BMD
                     Attributes.SetAttributeData(GXVertexAttribute.Tex7, NewTexCoord7.Values.ToList());
             }
 
-            public Dictionary<GXVertexAttribute, object> this[BMD.SHP1.Vertex IndexProvider]
+            public Dictionary<GXVertexAttribute, object> this[SHP1.Vertex IndexProvider]
             {
                 get
                 {
@@ -6847,6 +6847,19 @@ namespace Hack.io.BMD
             }
             throw new Exception("Bruh moment!!");
         }
+        public static OpenTK.Graphics.OpenGL.TextureWrapMode FromGXToOpenTK(J3D.JUtility.GXWrapMode Type)
+        {
+            switch (Type)
+            {
+                case GXWrapMode.CLAMP:
+                    return OpenTK.Graphics.OpenGL.TextureWrapMode.Clamp;
+                case GXWrapMode.REPEAT:
+                    return OpenTK.Graphics.OpenGL.TextureWrapMode.Repeat;
+                case GXWrapMode.MIRRORREAPEAT:
+                    return OpenTK.Graphics.OpenGL.TextureWrapMode.MirroredRepeat;
+            }
+            throw new Exception("Bruh moment!!");
+        }
 
         //=====================================================================
 
@@ -6894,7 +6907,7 @@ namespace Hack.io.BMD
             MatDisplayList = new MDL3(BDLFile);
             Textures = new TEX1(BDLFile);
             Materials.SetTextureNames(Textures);
-            VertexData.StipUnused(Shapes);
+            //VertexData.StipUnused(Shapes);
         }
 
         public class MDL3
