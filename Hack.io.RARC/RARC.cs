@@ -647,6 +647,8 @@ namespace Hack.io.RARC
                     if (Name == null)
                         return null;
                     string[] parts = Name.Split('.');
+                    if (parts.Length == 1)
+                        return "";
                     return "." + parts[parts.Length - 1].ToLower();
                 }
             }
@@ -966,7 +968,7 @@ namespace Hack.io.RARC
                         }
                         if (DirectoryItem.Key.Equals(".."))
                         {
-                            if (fe.ModularA == -1)
+                            if (fe.ModularA == -1 || fe.ModularA > Directories.Count)
                                 continue;
                             Directories[i].Parent = Directories[fe.ModularA];
                             continue;
