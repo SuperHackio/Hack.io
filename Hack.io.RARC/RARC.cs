@@ -277,7 +277,7 @@ namespace Hack.io.RARC
         /// Create an Archive from a Folder
         /// </summary>
         /// <param name="Folderpath">Folder to make an archive from</param>
-        public void Import(string Folderpath) => Root = new Directory(Folderpath);
+        public void Import(string Folderpath) => Root = new Directory(Folderpath, this);
         /// <summary>
         /// Dump the contents of this archive to a folder
         /// </summary>
@@ -345,11 +345,13 @@ namespace Hack.io.RARC
             /// Import a Folder into a RARCDirectory
             /// </summary>
             /// <param name="FolderPath"></param>
-            public Directory(string FolderPath)
+            /// <param name="Owner"></param>
+            public Directory(string FolderPath, RARC Owner)
             {
                 DirectoryInfo DI = new DirectoryInfo(FolderPath);
                 Name = DI.Name;
                 CreateFromFolder(FolderPath);
+                OwnerArchive = Owner;
             }
             internal Directory(RARC Owner, int ID, List<RARCDirEntry> DirectoryNodeList, List<RARCFileEntry> FlatFileList, uint DataBlockStart, Stream RARCFile)
             {
@@ -375,6 +377,7 @@ namespace Hack.io.RARC
             /// <param name="FolderPath">Folder to Export to. Don't expect the files to appear here. Expect a Folder with this <see cref="Name"/> to appear</param>
             public void Export(string FolderPath)
             {
+                System.IO.Directory.CreateDirectory(FolderPath);
                 foreach (KeyValuePair<string, object> item in Items)
                 {
                     if (item.Value is File file)
@@ -608,7 +611,8 @@ namespace Hack.io.RARC
             /// Create a RARC.Directory. You cannot use this function unless this directory is empty
             /// </summary>
             /// <param name="FolderPath"></param>
-            public void CreateFromFolder(string FolderPath)
+            /// <param name="OwnerArchive"></param>
+            public void CreateFromFolder(string FolderPath, RARC OwnerArchive = null)
             {
                 if (Items.Count > 0)
                     throw new Exception("Cannot create a directory from a folder if Items exist");
@@ -616,14 +620,14 @@ namespace Hack.io.RARC
                 for (int i = 0; i < Found.Length; i++)
                 {
                     File temp = new File(Found[i]);
-                    Items.Add(temp.Name, temp);
+                    Items[temp.Name] = temp;
                 }
 
                 string[] SubDirs = System.IO.Directory.GetDirectories(FolderPath, "*.*", SearchOption.TopDirectoryOnly);
                 for (int i = 0; i < SubDirs.Length; i++)
                 {
-                    Directory temp = new Directory(SubDirs[i]);
-                    Items.Add(temp.Name, temp);
+                    Directory temp = new Directory(SubDirs[i], OwnerArchive);
+                    Items[temp.Name] = temp;
                 }
             }
         }
@@ -754,7 +758,7 @@ namespace Hack.io.RARC
             {
                 get
                 {
-                    if (Parent.HasOwnerArchive)
+                    if (Parent?.HasOwnerArchive ?? false)
                     {
                         StringBuilder path = new StringBuilder();
                         GetFullPath(path);

@@ -10,7 +10,7 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("Super Hackio Incorporated")]
 [assembly: AssemblyProduct("Hack.io")]
-[assembly: AssemblyCopyright("Copyright © Super Hackio Incorporated 2018-2020")]
+[assembly: AssemblyCopyright("Copyright © Super Hackio Incorporated 2018-2021")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 

@@ -5,6 +5,10 @@ using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Collections;
+using System.Text;
+using System.Drawing;
+using System.Drawing.Drawing2D;
+using System.Drawing.Imaging;
 
 namespace Hack.ConsoleEx
 {
@@ -269,6 +273,75 @@ namespace Hack.io.Util
         /// </summary>
         /// <returns></returns>
         public static double GetSeconds() => endDate == DateTime.MinValue ? 0.0 : Span.TotalSeconds;
+    }
+    /// <summary>
+    /// Extra Encoding functions
+    /// </summary>
+    public static class EncodingEx
+    {
+        /// <summary>
+        /// Gets the amount of bytes this Encoding uses
+        /// </summary>
+        /// <param name="enc"></param>
+        /// <returns></returns>
+        public static int GetStride(this Encoding enc) => enc.GetMaxByteCount(0);
+    }
+    /// <summary>
+    /// Extra math functions
+    /// </summary>
+    public static class MathEx
+    {
+        /// <summary>
+        /// Clamps a value to the specified minimum and maximum value
+        /// </summary>
+        /// <typeparam name="T">IComparable</typeparam>
+        /// <param name="val">The value to clamp</param>
+        /// <param name="min">Minimum value to clamp to</param>
+        /// <param name="max">Maximum value to clamp to</param>
+        /// <returns>Max or Min, depending on Val</returns>
+        public static T Clamp<T>(this T val, T min, T max) where T : IComparable<T>
+        {
+            if (val.CompareTo(min) < 0) return min;
+            else if (val.CompareTo(max) > 0) return max;
+            else return val;
+        }
+    }
+    /// <summary>
+    /// 
+    /// </summary>
+    public static class BitmapEx
+    {
+        /// <summary>
+        /// Resize the image to the specified width and height.
+        /// </summary>
+        /// <param name="image">The image to resize.</param>
+        /// <param name="width">The width to resize to.</param>
+        /// <param name="height">The height to resize to.</param>
+        /// <returns>The resized image.</returns>
+        public static Bitmap ResizeImage(Image image, int width, int height)
+        {
+            Rectangle destRect = new Rectangle(0, 0, width, height);
+            Bitmap destImage = new Bitmap(width, height);
+
+            destImage.SetResolution(image.HorizontalResolution, image.VerticalResolution);
+
+            using (Graphics graphics = Graphics.FromImage(destImage))
+            {
+                graphics.CompositingMode = CompositingMode.SourceCopy;
+                graphics.CompositingQuality = CompositingQuality.HighQuality;
+                graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                graphics.SmoothingMode = SmoothingMode.HighQuality;
+                graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
+
+                using (ImageAttributes wrapMode = new ImageAttributes())
+                {
+                    wrapMode.SetWrapMode(WrapMode.TileFlipXY);
+                    graphics.DrawImage(image, destRect, 0, 0, image.Width, image.Height, GraphicsUnit.Pixel, wrapMode);
+                }
+            }
+
+            return destImage;
+        }
     }
     /// <summary>
     /// Class full of odds and ends that don't belong to a certain group

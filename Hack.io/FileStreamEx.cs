@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Drawing;
+using Hack.io.Util;
 
 namespace Hack.io
 {
@@ -522,17 +523,22 @@ namespace Hack.io
         public static string ReadString(this Stream FS, Encoding Encoding)
         {
             List<byte> bytes = new List<byte>();
-            int strCount = 0;
-            while (FS.ReadByte() != 0)
+            int ByteCount = Encoding.GetStride();
+            byte[] Checker = new byte[ByteCount];
+            bool IsDone = false;
+            do
             {
-                FS.Position -= 1;
-                bytes.Add((byte)FS.ReadByte());
-
-                strCount++;
-                if (strCount > FS.Length)
-                    throw new IOException("An error has occurred while reading the string");
-            }
-            return Encoding.GetString(bytes.ToArray(), 0, bytes.ToArray().Length);
+                if (FS.Position > FS.Length)
+                    throw new IOException("Stream ended before the String was terminated!");
+                Checker = FS.Read(0, ByteCount);
+                if (Checker.All(B => B == 0x00))
+                {
+                    IsDone = true;
+                    break;
+                }
+                bytes.AddRange(Checker);
+            } while (!IsDone);
+            return Encoding.GetString(bytes.ToArray(), 0, bytes.Count);
         }
         /// <summary>
         /// Reads a String from the file. String length is determined by the "<paramref name="StringLength"/>" parameter. <para/> The decoded string is defined by the "<paramref name="Encoding"/>" Parameter.
@@ -571,6 +577,20 @@ namespace Hack.io
             byte[] Write = Encoding.GetEncoding(932).GetBytes(String);
             FS.Write(Write, 0, Write.Length);
             FS.WriteByte(Terminator);
+        }
+        /// <summary>
+        /// Writes a string. String won't be null terminated
+        /// </summary>
+        /// <param name="FS"></param>
+        /// <param name="String">String to write to the file</param>
+        /// <param name="Encoding"></param>
+        [DebuggerStepThrough]
+        public static void WriteString(this Stream FS, string String, Encoding Encoding)
+        {
+            byte[] Write = Encoding.GetBytes(String);
+            FS.Write(Write, 0, Write.Length);
+            int stride = Encoding.GetStride();
+            FS.Write(new byte[stride], 0, stride);
         }
         /// <summary>
         /// Writes a Colour to a stream
@@ -616,14 +636,10 @@ namespace Hack.io
         /// Reads a char from the file.
         /// </summary>
         /// <param name="FS"></param>
-        /// <param name="CharLength">Expected Length of the Character</param>
         /// <param name="Encoding">Encoding to use when getting the string</param>
         /// <returns>Complete String</returns>
         [DebuggerStepThrough]
-        public static char ReadChar(this Stream FS, int CharLength, Encoding Encoding)
-        {
-            return Encoding.GetString(FS.Read(0, CharLength))[0];
-        }
+        public static char ReadChar(this Stream FS, Encoding Encoding) => Encoding.GetString(FS.Read(0, Encoding.GetStride()))[0];
         /// <summary>
         /// Peek the next byte
         /// </summary>
