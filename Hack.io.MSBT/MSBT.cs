@@ -35,6 +35,10 @@ namespace Hack.io.MSBT
             Read(FS);
             FS.Close();
         }
+        public MSBT(Stream Stream)
+        {
+            Read(Stream);
+        }
         public void Save(string file)
         {
             FileStream FS = new FileStream(file, FileMode.Create);
