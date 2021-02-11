@@ -121,7 +121,7 @@ namespace Hack.io.BCSV
             #endregion
 
             #region Collect the strings
-            List<string> Strings = new List<string>() { "5324" };
+            List<string> Strings = new List<string>();// { "5324" };
             for (int i = 0; i < EntryCount; i++)
             {
                 for (int j = 0; j < Entries[i].Data.Count; j++)
