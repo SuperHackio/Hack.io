@@ -77,6 +77,7 @@ namespace Hack.io.BTI
             FileStream BTIFile = new FileStream(filename, FileMode.Open);
             Read(BTIFile);
             BTIFile.Close();
+            FileName = filename;
         }
         public BTI(Stream memorystream) => Read(memorystream);
 
@@ -139,87 +140,97 @@ namespace Hack.io.BTI
                 }
                 byte[] ImageData = null;
                 Bitmap Result = null;
+                int oldWidth = ImageWidth % 4 != 0 ? (ImageWidth / 4) * 4 + 4 : ImageWidth;
+                int FullWidth = oldWidth % 8 != 0 ? (oldWidth / 8) * 8 + 8 : oldWidth;
+
+                int oldHeight = ImageHeight % 4 != 0 ? (ImageHeight / 4) * 4 + 4 : ImageHeight;
+                int FullHeight = oldHeight % 8 != 0 ? (oldHeight / 8) * 8 + 8 : oldHeight;
                 switch (Format)
                 {
                     case GXImageFormat.I4:
                         #region DecodeI4
-                        ImageData = BTIFile.Read(0, (GetFullWidth(ImageWidth) * GetFullHeight(ImageHeight)) / 2);
-                        Result = DecodeImage(ImageData, null, Format, null, null, GetFullWidth(ImageWidth), GetFullHeight(ImageHeight));
+                        ImageData = BTIFile.Read(0, (ImageWidth * ImageHeight) / 2);
+                        Result = DecodeImage(ImageData, null, Format, null, null, ImageWidth, ImageHeight);
                         #endregion
                         break;
                     case GXImageFormat.I8:
                         #region DecodeI8
-                        ImageData = BTIFile.Read(0, GetFullWidth(ImageWidth) * GetFullHeight(ImageHeight));
-                        Result = DecodeImage(ImageData, null, Format, null, null, GetFullWidth(ImageWidth), GetFullHeight(ImageHeight));
+                        ImageData = BTIFile.Read(0, ImageWidth * ImageHeight);
+                        Result = DecodeImage(ImageData, null, Format, null, null, ImageWidth, ImageHeight);
                         #endregion
                         break;
                     case GXImageFormat.IA4:
                         #region DecodeIA4
-                        ImageData = BTIFile.Read(0, GetFullWidth(ImageWidth) * GetFullHeight(ImageHeight));
-                        Result = DecodeImage(ImageData, null, Format, null, null, GetFullWidth(ImageWidth), GetFullHeight(ImageHeight));
+                        ImageData = BTIFile.Read(0, ImageWidth * ImageHeight);
+                        Result = DecodeImage(ImageData, null, Format, null, null, ImageWidth, ImageHeight);
                         #endregion
                         break;
                     case GXImageFormat.IA8:
                         #region DecodeIA8
-                        ImageData = BTIFile.Read(0, (GetFullWidth(ImageWidth) * GetFullHeight(ImageHeight)) * 2);
-                        Result = DecodeImage(ImageData, null, Format, null, null, GetFullWidth(ImageWidth), GetFullHeight(ImageHeight));
+                        ImageData = BTIFile.Read(0, (ImageWidth * ImageHeight) * 2);
+                        Result = DecodeImage(ImageData, null, Format, null, null, ImageWidth, ImageHeight);
                         #endregion
                         break;
                     case GXImageFormat.RGB565:
                         #region DecodeRGB565
-                        ImageData = BTIFile.Read(0, (GetFullWidth(ImageWidth) * GetFullHeight(ImageHeight)) * 2);
-                        Result = DecodeImage(ImageData, null, Format, null, null, GetFullWidth(ImageWidth), GetFullHeight(ImageHeight));
+                        ImageData = BTIFile.Read(0, (ImageWidth * ImageHeight) * 2);
+                        Result = DecodeImage(ImageData, null, Format, null, null, ImageWidth, ImageHeight);
                         #endregion
                         break;
                     case GXImageFormat.RGB5A3:
                         #region DecodeRGB5A3
-                        ImageData = BTIFile.Read(0, (GetFullWidth(ImageWidth) * GetFullHeight(ImageHeight)) * 2);
-                        Result = DecodeImage(ImageData, null, Format, null, null, GetFullWidth(ImageWidth), GetFullHeight(ImageHeight));
+                        ImageData = BTIFile.Read(0, (ImageWidth * ImageHeight) * 2);
+                        Result = DecodeImage(ImageData, null, Format, null, null, ImageWidth, ImageHeight);
                         #endregion
                         break;
                     case GXImageFormat.RGBA32:
                         #region DecodeRGBA32
-                        ImageData = BTIFile.Read(0, (GetFullWidth(ImageWidth) * GetFullHeight(ImageHeight)) * 4);
-                        Result = DecodeImage(ImageData, null, Format, null, null, GetFullWidth(ImageWidth), GetFullHeight(ImageHeight));
+                        ImageData = BTIFile.Read(0, (ImageWidth * ImageHeight) * 4);
+                        Result = DecodeImage(ImageData, null, Format, null, null, ImageWidth, ImageHeight);
                         #endregion
                         break;
                     case GXImageFormat.C4:
                         #region DecodeC4
-                        ImageData = BTIFile.Read(0, (GetFullWidth(ImageWidth) * GetFullHeight(ImageHeight)) / 2);
-                        Result = DecodeImage(ImageData, PaletteData, Format, PaletteFormat, PaletteCount, GetFullWidth(ImageWidth), GetFullHeight(ImageHeight));
+                        ImageData = BTIFile.Read(0, (FullWidth * FullHeight) / 2);
+                        Result = DecodeImage(ImageData, PaletteData, Format, PaletteFormat, PaletteCount, FullWidth, FullHeight);
                         #endregion
                         break;
                     case GXImageFormat.C8:
                         #region DecodeC8
-                        ImageData = BTIFile.Read(0, GetFullWidth(ImageWidth) * GetFullHeight(ImageHeight));
-                        Result = DecodeImage(ImageData, PaletteData, Format, PaletteFormat, PaletteCount, GetFullWidth(ImageWidth), GetFullHeight(ImageHeight));
+                        ImageData = BTIFile.Read(0, FullWidth * FullHeight);
+                        Result = DecodeImage(ImageData, PaletteData, Format, PaletteFormat, PaletteCount, FullWidth, FullHeight);
                         #endregion
                         break;
                     case GXImageFormat.C14X2:
                         #region DecodeC14X2
-                        ImageData = BTIFile.Read(0, (GetFullWidth(ImageWidth) * GetFullHeight(ImageHeight)) * 2);
-                        Result = DecodeImage(ImageData, PaletteData, Format, PaletteFormat, PaletteCount, GetFullWidth(ImageWidth), GetFullHeight(ImageHeight));
+                        ImageData = BTIFile.Read(0, (FullWidth * FullHeight) * 2);
+                        Result = DecodeImage(ImageData, PaletteData, Format, PaletteFormat, PaletteCount, FullWidth, FullHeight);
                         #endregion
                         break;
                     case GXImageFormat.CMPR:
                         #region DecodeDXT1
-                        int FullHeight = GetFullHeight(ImageHeight), FullWidth = GetFullWidth(ImageWidth);
                         int BytesNeededForEncode = FullWidth * FullHeight * 4 / 8;
                         ImageData = BTIFile.Read(0, BytesNeededForEncode);
-                        Result = DecodeImage(ImageData, null, Format, null, null, GetFullWidth(ImageWidth), GetFullHeight(ImageHeight));
+                        Result = DecodeImage(ImageData, null, Format, null, null, FullWidth, FullHeight);
                         #endregion
                         break;
                     default:
                         throw new Exception("Invalid format");
                 }
-                mipmaps.Add(Result);
+                Bitmap nb = new Bitmap(ImageWidth, ImageHeight);
+                using (Graphics g = Graphics.FromImage(nb))
+                {
+                    g.DrawImage(Result, 0, 0);
+                }
+                Result.Dispose();
+                mipmaps.Add(nb);
             }
         }
         private void Write(Stream BTIFile, ref long DataOffset)
         {
             List<byte> ImageData = new List<byte>();
             List<byte> PaletteData = new List<byte>();
-            GetImageAndPaletteData(ref ImageData, ref PaletteData, mipmaps, Format, PaletteFormat, AlphaSetting);
+            GetImageAndPaletteData(ref ImageData, ref PaletteData, mipmaps, Format, PaletteFormat);
             long HeaderStart = BTIFile.Position;
             int ImageDataStart = (int)((DataOffset + PaletteData.Count) - HeaderStart), PaletteDataStart = (int)(DataOffset - HeaderStart);
             BTIFile.WriteByte((byte)Format);
@@ -228,7 +239,7 @@ namespace Hack.io.BTI
             BTIFile.WriteReverse(BitConverter.GetBytes((ushort)mipmaps[0].Height), 0, 2);
             BTIFile.WriteByte((byte)WrapS);
             BTIFile.WriteByte((byte)WrapT);
-            if (IsPaletteFormat(Format))
+            if (Format.IsPaletteFormat())
             {
                 BTIFile.WriteByte(0x01);
                 BTIFile.WriteByte((byte)PaletteFormat);
