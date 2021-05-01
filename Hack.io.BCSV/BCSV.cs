@@ -113,7 +113,8 @@ namespace Hack.io.BCSV
                 currentfield.EntryOffset = offset;
                 offset += (ushort)(currentfield.DataType == DataTypes.BYTE ? 1 : (currentfield.DataType == DataTypes.INT16 ? 2 : 4));
             }
-            
+            while (offset % 4 != 0)
+                offset++;
 
             #region Fill the Entries
             for (int i = 0; i < EntryCount; i++)
@@ -158,6 +159,8 @@ namespace Hack.io.BCSV
             for (int i = 0; i < EntryCount; i++)
             {
                 Entries[i].Save(BCSV, Fields, offset, Strings);
+                while (BCSV.Position % 4 != 0)
+                    BCSV.WriteByte(0x00);
                 Console.Write($"\r{Math.Min(((float)(i + 1) / (float)Entries.Count) * 100.0f, 100.0f)}%          ");
             }
             Console.WriteLine("Complete!");
@@ -632,7 +635,7 @@ namespace Hack.io.BCSV
                             BCSV.WriteReverse(BitConverter.GetBytes((short)Data[Field.Key]), 0, 2);
                             break;
                         case DataTypes.BYTE:
-                            BCSV.WriteReverse(BitConverter.GetBytes((byte)Data[Field.Key]), 0, 1);
+                            BCSV.WriteByte((byte)Data[Field.Key]);
                             break;
                         case DataTypes.STRING:
                             Encoding enc = Encoding.GetEncoding(932);
