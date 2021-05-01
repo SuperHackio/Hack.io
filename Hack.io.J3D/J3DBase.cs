@@ -17,7 +17,7 @@ namespace Hack.io.J3D
         /// <summary>
         /// Padding string
         /// </summary>
-        public static readonly string Padding = "Hack.io © Super Hackio Incorporated 2018-2020";
+        public static readonly string Padding = "Hack.io © Super Hackio Incorporated 2018-2021";
 
         /// <summary>
         /// Adds Padding to the Current Position in the provided Stream
@@ -235,13 +235,21 @@ namespace Hack.io.J3D
             while (BlockY < Height)
             {
                 Color[] PixelData = DecodeBlock(ImageData, Format, offset, BlockDataSize, PaletteColours);
+                if (Format == GXImageFormat.RGBA32)
+                {
+
+                }
                 for (int i = 0; i < PixelData.Length; i++)
                 {
-                    ActiveX = (i % BlockWidth) + BlockX;
-                    ActiveY = ((int)Math.Floor(i / (double)BlockWidth)) + BlockY;
+                    ActiveX = (i % BlockWidth);// + BlockX;
+                    ActiveY = ((int)Math.Floor(i / (double)BlockWidth));// + BlockY;
                     if (ActiveX >= Width || ActiveY >= Height)
                         continue;
-                    int Start = ((ActiveY * Width) + ActiveX) * 4;
+                    int xpos = BlockX + ActiveX;
+                    int ypos = BlockY + ActiveY;
+                    int Start = ((ypos * Width) + xpos) * 4;
+                    if (Start >= Pixels.Length)
+                        break;
                     Pixels[Start] = PixelData[i].B;
                     Pixels[Start + 1] = PixelData[i].G;
                     Pixels[Start + 2] = PixelData[i].R;
@@ -306,37 +314,47 @@ namespace Hack.io.J3D
         public static Color[] DecodeBlock(byte[] ImageData, GXImageFormat Format, int Offset, int BlockSize, Color[] Colours)
         {
             List<Color> Result = new List<Color>();
+            if (Offset >= ImageData.Length)
+                return Result.ToArray();
+
             int BlockSizeHalfed = (int)Math.Floor(BlockSize / 2.0);
             switch (Format)
             {
                 case GXImageFormat.I4:
                     for (int i = 0; i < BlockSize; i++)
                         for (int nibble = 0; nibble < 2; nibble++)
-                            Result.Add(I4ToColor((byte)((ImageData[Offset + i] >> (1 - nibble) * 4) & 0xF)));
+                            if (Offset + i < ImageData.Length)
+                                Result.Add(I4ToColor((byte)((ImageData[Offset + i] >> (1 - nibble) * 4) & 0xF)));
                     break;
                 case GXImageFormat.I8:
                     for (int i = 0; i < BlockSize; i++)
-                        Result.Add(I8ToColor(ImageData[Offset + i]));
+                        if (Offset + i < ImageData.Length)
+                            Result.Add(I8ToColor(ImageData[Offset + i]));
                     break;
                 case GXImageFormat.IA4:
                     for (int i = 0; i < BlockSize; i++)
-                        Result.Add(IA4ToColor(ImageData[Offset + i]));
+                        if (Offset + i < ImageData.Length)
+                            Result.Add(IA4ToColor(ImageData[Offset + i]));
                     break;
                 case GXImageFormat.IA8:
                     for (int i = 0; i < BlockSizeHalfed; i++)
-                        Result.Add(IA8ToColor(BitConverter.ToUInt16(new byte[2] { ImageData[(Offset + i * 2) + 1], ImageData[Offset + i * 2] }, 0)));
+                        if (Offset + i * 2 < ImageData.Length)
+                            Result.Add(IA8ToColor(BitConverter.ToUInt16(new byte[2] { ImageData[(Offset + i * 2) + 1], ImageData[Offset + i * 2] }, 0)));
                     break;
                 case GXImageFormat.RGB565:
                     for (int i = 0; i < BlockSizeHalfed; i++)
-                        Result.Add(RGB565ToColor(BitConverter.ToUInt16(new byte[2] { ImageData[(Offset + i * 2) + 1], ImageData[Offset + i * 2] }, 0)));
+                        if (Offset + i * 2 < ImageData.Length)
+                            Result.Add(RGB565ToColor(BitConverter.ToUInt16(new byte[2] { ImageData[(Offset + i * 2) + 1], ImageData[Offset + i * 2] }, 0)));
                     break;
                 case GXImageFormat.RGB5A3:
                     for (int i = 0; i < BlockSizeHalfed; i++)
-                        Result.Add(RGB5A3ToColor(BitConverter.ToUInt16(new byte[2] { ImageData[(Offset + i * 2) + 1], ImageData[Offset + i * 2] }, 0)));
+                        if (Offset + i * 2 < ImageData.Length)
+                            Result.Add(RGB5A3ToColor(BitConverter.ToUInt16(new byte[2] { ImageData[(Offset + i * 2) + 1], ImageData[Offset + i * 2] }, 0)));
                     break;
                 case GXImageFormat.RGBA32:
                     for (int i = 0; i < 16; i++)
-                        Result.Add(Color.FromArgb(ImageData[Offset + (i * 2)], ImageData[Offset + (i * 2) + 1], ImageData[Offset + (i * 2) + 32], ImageData[Offset + (i * 2) + 33]));
+                        if (Offset + i * 2 < ImageData.Length)
+                            Result.Add(Color.FromArgb(ImageData[Offset + (i * 2)], ImageData[Offset + (i * 2) + 1], ImageData[Offset + (i * 2) + 32], ImageData[Offset + (i * 2) + 33]));
                     break;
                 case GXImageFormat.C4:
                     for (int i = 0; i < BlockSize; i++)
@@ -399,41 +417,43 @@ namespace Hack.io.J3D
             return new Color[4] { Left, Right, InterpA, InterpB };
         }
         /// <summary>
-        /// 
+        /// Use in the context of mipmaps
         /// </summary>
-        /// <param name="width"></param>
-        /// <returns></returns>
-        public static int GetFullWidth(int width)
-        {
-            int oldWidth = width % 4 != 0 ? (width / 4) * 4 + 4 : width;
-            return oldWidth % 8 != 0 ? (oldWidth / 8) * 8 + 8 : oldWidth;
-        }
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="height"></param>
-        /// <returns></returns>
-        public static int GetFullHeight(int height)
-        {
-            int oldHeight = height % 4 != 0 ? (height / 4) * 4 + 4 : height;
-            return oldHeight % 8 != 0 ? (oldHeight / 8) * 8 + 8 : oldHeight;
-        }
-
-        public static void GetImageAndPaletteData(ref List<byte> ImageData, ref List<byte> PaletteData, List<Bitmap> Images, GXImageFormat Format, GXPaletteFormat PaletteFormat, JUTTransparency AlphaMode)
+        /// <param name="ImageData"></param>
+        /// <param name="PaletteData"></param>
+        /// <param name="Images"></param>
+        /// <param name="Format"></param>
+        /// <param name="PaletteFormat"></param>
+        /// <param name="AlphaMode"></param>
+        public static void GetImageAndPaletteData(ref List<byte> ImageData, ref List<byte> PaletteData, List<Bitmap> Images, GXImageFormat Format, GXPaletteFormat PaletteFormat)
         {
             Tuple<Dictionary<Color, int>, ushort[]> Palette = CreatePalette(Images, Format, PaletteFormat);
             PaletteData = EncodePalette(Palette.Item2, Format).ToList();
             for (int i = 0; i < Images.Count; i++)
-                EncodeImage(ref ImageData, Images[i], Format, Palette.Item1, AlphaMode);
+                EncodeImage(ref ImageData, Images[i], Format, Palette.Item1);
+        }
+        /// <summary>
+        /// Use in the context of no mipmaps
+        /// </summary>
+        /// <param name="ImageData"></param>
+        /// <param name="PaletteData"></param>
+        /// <param name="Image"></param>
+        /// <param name="Format"></param>
+        /// <param name="PaletteFormat"></param>
+        public static void GetImageAndPaletteData(ref List<byte> ImageData, ref List<byte> PaletteData, Bitmap Image, GXImageFormat Format, GXPaletteFormat PaletteFormat)
+        {
+            Tuple<Dictionary<Color, int>, ushort[]> Palette = CreatePalette(Image, Format, PaletteFormat);
+            PaletteData = EncodePalette(Palette.Item2, Format).ToList();
+            EncodeImage(ref ImageData, Image, Format, Palette.Item1);
         }
 
-        public static void EncodeImage(ref List<byte> ImageData, Bitmap Image, GXImageFormat Format, Dictionary<Color, int> ColourIndicies, JUTTransparency AlphaMode)
+        public static void EncodeImage(ref List<byte> ImageData, Bitmap Image, GXImageFormat Format, Dictionary<Color, int> ColourIndicies)
         {
             int block_x = 0, block_y = 0;
 
             while (block_y < Image.Height)
             {
-                byte[] block_data = EncodeBlock(Format, Image, ColourIndicies, block_x, block_y, AlphaMode);
+                byte[] block_data = EncodeBlock(Format, Image, ColourIndicies, block_x, block_y);
 
                 ImageData.AddRange(block_data);
 
@@ -498,8 +518,58 @@ namespace Hack.io.J3D
             }
             return new Tuple<Dictionary<Color, int>, ushort[]>(colors_to_color_indexes, encoded_colors.ToArray());
         }
+        public static Tuple<Dictionary<Color, int>, ushort[]> CreatePalette(Bitmap Image, GXImageFormat Format, GXPaletteFormat PaletteFormat)
+        {
+            if (!(Format == GXImageFormat.C4 || Format == GXImageFormat.C8 || Format == GXImageFormat.C14X2))
+                return new Tuple<Dictionary<Color, int>, ushort[]>(null, null);
 
-        public static byte[] EncodeBlock(GXImageFormat Format, Bitmap Image, Dictionary<Color, int> ColourIndicies, int BlockX, int BlockY, JUTTransparency AlphaMode)
+            List<byte> ImageData = new List<byte>();
+            List<ushort> encoded_colors = new List<ushort>();
+            Dictionary<Color, int> colors_to_color_indexes = new Dictionary<Color, int>();
+
+            ImageData.AddRange(Image.ToByteArray());
+            for (int y = 0; y < Image.Height; y++)
+            {
+                for (int x = 0; x < Image.Width; x++)
+                {
+                    int z = ((y * Image.Width) + x) * 4;
+                    Color Col = Color.FromArgb(ImageData[z + 3], ImageData[z + 2], ImageData[z + 1], ImageData[z]);
+                    ushort ColEncoded = EncodeColour(Col, PaletteFormat);
+                    if (!encoded_colors.Contains(ColEncoded))
+                        encoded_colors.Add(ColEncoded);
+                    if (!colors_to_color_indexes.ContainsKey(Col))
+                        colors_to_color_indexes.Add(Col, encoded_colors.IndexOf(ColEncoded));
+                }
+            }
+
+            if (encoded_colors.Count > GetMaxColours(Format))
+            {
+                // If the image has more colors than the selected image format can support, we automatically reduce the number of colors.
+                //For C4 and C8, the colors should have already been reduced by Pillow's quantize method.
+                // So the maximum number of colors can only be exceeded for C14X2.
+
+                Color[] LimitedPalette = CreateLimitedPalette(Image, GetMaxColours(Format), PaletteFormat != GXPaletteFormat.RGB565);
+                encoded_colors = new List<ushort>();
+                colors_to_color_indexes = new Dictionary<Color, int>();
+
+                for (int y = 0; y < Image.Height; y++)
+                {
+                    for (int x = 0; x < Image.Width; x++)
+                    {
+                        int z = ((y * Image.Width) + x) * 4;
+                        Color Col = Color.FromArgb(ImageData[z + 3], ImageData[z + 2], ImageData[z + 1], ImageData[z]);
+                        ushort ColEncoded = EncodeColour(GetNearestColour(Col, LimitedPalette), PaletteFormat);
+                        if (!encoded_colors.Contains(ColEncoded))
+                            encoded_colors.Add(ColEncoded);
+                        if (!colors_to_color_indexes.ContainsKey(Col))
+                            colors_to_color_indexes.Add(Col, encoded_colors.IndexOf(ColEncoded));
+                    }
+                }
+            }
+            return new Tuple<Dictionary<Color, int>, ushort[]>(colors_to_color_indexes, encoded_colors.ToArray());
+        }
+
+        public static byte[] EncodeBlock(GXImageFormat Format, Bitmap Image, Dictionary<Color, int> ColourIndicies, int BlockX, int BlockY)
         {
             byte[] Pixels = Image.ToByteArray();
             byte[] EncodedBlock = new byte[Format == GXImageFormat.RGBA32 ? 64 : 32];
@@ -556,7 +626,7 @@ namespace Hack.io.J3D
                     #region Encode IA4
                     for (int y = BlockY; y < BlockY + CurrentBlockHeight; y++)
                     {
-                        for (int x = BlockX; x < BlockX + CurrentBlockWidth; x += 2)
+                        for (int x = BlockX; x < BlockX + CurrentBlockWidth; x ++)
                         {
                             if (x >= Image.Width || y >= Image.Height)
                                 EncodedBlock[Offset++] = 0xFF; //Block Bleeds past image width
@@ -837,6 +907,43 @@ namespace Hack.io.J3D
             return SplitToBuckets(all_pixel_colors, depth);
         }
 
+        public static Color[] CreateLimitedPalette(Bitmap Image, int MaxColours, bool Alpha = true)
+        {
+            List<byte> ImageData = new List<byte>();
+                ImageData.AddRange(Image.ToByteArray());
+
+            int depth;
+            if (MaxColours == 16)
+                depth = 4;
+            else if (MaxColours == 256)
+                depth = 8;
+            else if (MaxColours == 16384)
+                depth = 14;
+            else
+                throw new Exception($"Unsupported maximum number of colors to generate a palette for: {MaxColours}");
+
+            List<Color> all_pixel_colors = new List<Color>();
+            bool already_have_zero_alpha_color = false;
+                for (int y = 0; y < Image.Height; y++)
+                {
+                    for (int x = 0; x < Image.Width; x++)
+                    {
+                        int z = ((y * Image.Width) + x) * 4;
+                        Color Col = Color.FromArgb(ImageData[z + 3], ImageData[z + 2], ImageData[z + 1], ImageData[z]);
+                        if (!Alpha)
+                            Col = Color.FromArgb(Col.R, Col.G, Col.B);
+                        else if (Col.A == 0)
+                        {
+                            if (already_have_zero_alpha_color)
+                                continue;
+                            already_have_zero_alpha_color = true;
+                        }
+                        all_pixel_colors.Add(Col);
+                    }
+                }
+            return SplitToBuckets(all_pixel_colors, depth);
+        }
+
         private static Color[] SplitToBuckets(List<Color> AllColours, int Depth)
         {
             if (Depth == 0)
@@ -993,7 +1100,7 @@ namespace Hack.io.J3D
         public static Color IA4ToColor(byte Raw)
         {
             int low_nibble = ((Raw & 0xF) << 4) | Raw & 0xF;
-            return Color.FromArgb(((Raw >> 4) & 0xF << 4) | ((Raw >> 4) & 0xF), low_nibble, low_nibble, low_nibble);
+            return Color.FromArgb((((Raw >> 4) & 0xF) << 4) | ((Raw >> 4) & 0xF), low_nibble, low_nibble, low_nibble);
         }
 
         public static byte ToIA4(this Color Col)
@@ -1001,7 +1108,7 @@ namespace Hack.io.J3D
             int Value = (int)Math.Round(((Col.R * 30) + (Col.G * 59) + (Col.B * 11)) / 100.0);
             int Result = 0x00;
             Result |= ((Value >> 4) & 0xF);
-            Result |= (Col.A & 0xF0);
+            Result |= ((Col.A << 4) & 0xF0);
             return (byte)Result;
         }
 
@@ -1166,7 +1273,7 @@ namespace Hack.io.J3D
             { GXImageFormat.CMPR, new Tuple<int, int>(8, 8) }
         };
 
-        public static int GetMaxColours(GXImageFormat Format)
+        public static int GetMaxColours(this GXImageFormat Format)
         {
             switch (Format)
             {
@@ -1177,14 +1284,14 @@ namespace Hack.io.J3D
                 case GXImageFormat.C14X2:
                     return 1 << 14;
                 default:
-                    throw new Exception("Bad Format");
+                    throw new Exception("Not a Palette format!");
             }
         }
 
-        public static bool IsPaletteFormat(GXImageFormat Format) => Format == GXImageFormat.C4 || Format == GXImageFormat.C8 || Format == GXImageFormat.C14X2;
+        public static bool IsPaletteFormat(this GXImageFormat Format) => Format == GXImageFormat.C4 || Format == GXImageFormat.C8 || Format == GXImageFormat.C14X2;
 
         /// <summary>
-        /// Enum of Image formats that TPL supports
+        /// Enum of Image formats that BTI/TPL supports
         /// </summary>
         public enum GXImageFormat : byte
         {
@@ -1282,7 +1389,7 @@ namespace Hack.io.J3D
             /// </summary>
             TRANSLUCENT = 0x02,
             /// <summary>
-            /// Undefined
+            /// Unknown
             /// </summary>
             SPECIAL = 0xCC
         }
