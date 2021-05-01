@@ -35,6 +35,7 @@ namespace Hack.io.BMD
             FileStream FS = new FileStream(Filename, FileMode.Open);
             Read(FS);
             FS.Close();
+            FileName = Filename;
         }
         public BMD(Stream BMD) => Read(BMD);
 
@@ -52,6 +53,7 @@ namespace Hack.io.BMD
             FileStream FS = new FileStream(Filename, FileMode.Create);
             Write(FS);
             FS.Close();
+            FileName = Filename;
         }
         public virtual void Save(Stream BMD) => Write(BMD);
 
@@ -79,7 +81,7 @@ namespace Hack.io.BMD
                 BMD.Position -= 0x04;
             Textures = new TEX1(BMD);
             Materials.SetTextureNames(Textures);
-            VertexData.StipUnused(Shapes);
+            //VertexData.StipUnused(Shapes);
         }
 
         protected virtual void Write(Stream BMD)
@@ -1666,11 +1668,15 @@ namespace Hack.io.BMD
                 writer.Write(new byte[2] { 0xFF, 0xFF }, 0, 2);
 
                 writer.Write(new byte[4] { 0x00, 0x00, 0x00, 0x14 }, 0, 4); // Offset to weight type bools, always 20
+                long IndiciesOffset = writer.Position;
                 writer.WriteReverse(BitConverter.GetBytes(20 + WeightTypeCheck.Count), 0, 4); // Offset to indices, always 20 + number of weight type bools
 
                 foreach (bool bol in WeightTypeCheck)
                     writer.WriteByte((byte)(bol ? 0x01 : 0x00));
 
+                AddPadding(writer, 2);
+
+                uint IndOffs = (uint)(writer.Position - start);
                 foreach (int inte in Indices)
                     writer.WriteReverse(BitConverter.GetBytes((short)inte), 0, 2);
 
@@ -1681,6 +1687,8 @@ namespace Hack.io.BMD
 
                 writer.Position = start + 4;
                 writer.WriteReverse(BitConverter.GetBytes((int)length), 0, 4);
+                writer.Position = start + 0x10;
+                writer.WriteReverse(BitConverter.GetBytes(IndOffs), 0, 4); // Offset to indices, always 20 + number of weight type bools
                 writer.Position = end;
             }
         }
@@ -3214,9 +3222,10 @@ namespace Hack.io.BMD
                 {
                     Name = m_MaterialNames[matindex],
                     Flag = (byte)reader.ReadByte(),
-                    CullMode = m_CullModeBlock[reader.ReadByte()]
+                    CullMode = m_CullModeBlock[reader.ReadByte()],
+                    LightChannelCount = NumColorChannelsBlock[reader.ReadByte()]
                 };
-                reader.Position += 0x03;
+                reader.Position += 0x02;
 
                 if (matindex < m_IndirectTexBlock.Count)
                 {
@@ -3464,7 +3473,7 @@ namespace Hack.io.BMD
                 List<string> m_MaterialNames = new List<string>();
 
                 List<Material.IndirectTexturing> m_IndirectTexBlock = new List<Material.IndirectTexturing>();
-                List<CullMode> m_CullModeBlock = new List<CullMode>();
+                List<CullMode> m_CullModeBlock = new List<CullMode>() { CullMode.Back, CullMode.Front, CullMode.None };
                 List<Color4> m_MaterialColorBlock = new List<Color4>();
                 List<Material.ChannelControl> m_ChannelControlBlock = new List<Material.ChannelControl>();
                 List<Color4> m_AmbientColorBlock = new List<Color4>();
@@ -3478,7 +3487,7 @@ namespace Hack.io.BMD
                 List<Color4> m_TevColorBlock = new List<Color4>();
                 List<Color4> m_TevKonstColorBlock = new List<Color4>();
                 List<Material.TevStage> m_TevStageBlock = new List<Material.TevStage>();
-                List<Material.TevSwapMode> m_SwapModeBlock = new List<Material.TevSwapMode>();
+                List<Material.TevSwapMode> m_SwapModeBlock = new List<Material.TevSwapMode>() { new Material.TevSwapMode(0,0), new Material.TevSwapMode(0,0) };
                 List<Material.TevSwapModeTable> m_SwapTableBlock = new List<Material.TevSwapModeTable>();
                 List<Material.Fog> m_FogBlock = new List<Material.Fog>();
                 List<Material.AlphaCompare> m_AlphaCompBlock = new List<Material.AlphaCompare>();
@@ -3486,8 +3495,8 @@ namespace Hack.io.BMD
                 List<Material.NBTScaleHolder> m_NBTScaleBlock = new List<Material.NBTScaleHolder>();
 
                 List<Material.ZModeHolder> m_zModeBlock = new List<Material.ZModeHolder>();
-                List<bool> m_zCompLocBlock = new List<bool>();
-                List<bool> m_ditherBlock = new List<bool>();
+                List<bool> m_zCompLocBlock = new List<bool>() { false, true };
+                List<bool> m_ditherBlock = new List<bool>() { false, true };
 
                 List<byte> NumColorChannelsBlock = new List<byte>();
                 List<byte> NumTexGensBlock = new List<byte>();
@@ -3519,6 +3528,8 @@ namespace Hack.io.BMD
                     m_MaterialNames.Add(mat.Name);
 
                     m_IndirectTexBlock.Add(mat.IndTexEntry);
+                    if (m_Materials[i].LightChannelCount > 2)
+                        m_Materials[i].LightChannelCount = 2;
                 }
 
                 writer.WriteString(Magic);
@@ -3673,11 +3684,11 @@ namespace Hack.io.BMD
 
                 curOffset = writer.Position;
 
-                // tex coord 2 data offset
-                Offsets[11] = m_TexCoord2GenBlock == null ? 0 : (int)(curOffset - start);
+                // tex coord 2 data offset AKA PostTexGenInfoOffset
+                Offsets[11] = (m_TexCoord2GenBlock == null || m_TexCoord2GenBlock.Count == 0) ? 0 : (int)(curOffset - start);
 
                 //TexCoordGenIO.Write(writer, m_TexCoord2GenBlock);
-                if (m_TexCoord2GenBlock != null)
+                if (m_TexCoord2GenBlock != null && m_TexCoord2GenBlock.Count != 0)
                 {
                     foreach (Material.TexCoordGen gen in m_TexCoord2GenBlock)
                         gen.Write(writer);
@@ -3696,10 +3707,10 @@ namespace Hack.io.BMD
                 curOffset = writer.Position;
 
                 // tex matrix 2 data offset
-                Offsets[13] = m_TexMatrix2Block == null ? 0 : (int)(curOffset - start);
+                Offsets[13] = (m_TexMatrix2Block == null || m_TexMatrix2Block.Count == 0) ? 0 : (int)(curOffset - start);
 
                 //TexMatrixIO.Write(writer, m_TexMatrix2Block);
-                if (m_TexMatrix2Block != null)
+                if (m_TexMatrix2Block != null && m_TexMatrix2Block.Count != 0)
                 {
                     foreach (Material.TexMatrix gen in m_TexMatrix2Block)
                         gen.Write(writer);
@@ -3838,7 +3849,8 @@ namespace Hack.io.BMD
 
                 curOffset = writer.Position;
 
-                if (m_ditherBlock != null)
+                //Dither Block
+                if (m_ditherBlock != null && m_ditherBlock.Count != 0)
                 {
                     // dither data offset
                     Offsets[27] = (int)(curOffset - start);
@@ -3881,9 +3893,9 @@ namespace Hack.io.BMD
                     m_CullModeBlock.Add(mat.CullMode);
                 writer.WriteByte((byte)m_CullModeBlock.IndexOf(mat.CullMode));
 
-                if (!NumColorChannelsBlock.Any(NCC => NCC == mat.ColorChannelControlsCount))
-                    NumColorChannelsBlock.Add(mat.ColorChannelControlsCount);
-                writer.WriteByte((byte)NumColorChannelsBlock.IndexOf(mat.ColorChannelControlsCount));
+                if (!NumColorChannelsBlock.Any(NCC => NCC == mat.LightChannelCount))
+                    NumColorChannelsBlock.Add(mat.LightChannelCount);
+                writer.WriteByte((byte)NumColorChannelsBlock.IndexOf(mat.LightChannelCount));
 
                 if (!NumTexGensBlock.Any(NTG => NTG == mat.NumTexGensCount))
                     NumTexGensBlock.Add(mat.NumTexGensCount);
@@ -4126,19 +4138,6 @@ namespace Hack.io.BMD
                 public string Name;
                 public byte Flag;
                 public bool IsTranslucent => (Flag & 3) == 0;
-                public byte ColorChannelControlsCount
-                {
-                    get
-                    {
-                        byte value = 0;
-                        for (int i = 0; i < ChannelControls.Length; i++)
-                        {
-                            if (ChannelControls[i].HasValue)
-                                value++;
-                        }
-                        return value;
-                    }
-                }
                 public byte NumTexGensCount
                 {
                     get
@@ -4167,6 +4166,7 @@ namespace Hack.io.BMD
                 }
 
                 public CullMode CullMode;
+                public byte LightChannelCount;
                 public bool ZCompLoc;
                 public bool Dither;
 
@@ -4207,6 +4207,7 @@ namespace Hack.io.BMD
                 public Material()
                 {
                     CullMode = CullMode.Back;
+                    LightChannelCount = 1;
                     MaterialColors = new Color4?[2] { new Color4(1, 1, 1, 1), null };
 
                     ChannelControls = new ChannelControl?[4];
@@ -4257,6 +4258,7 @@ namespace Hack.io.BMD
                 {
                     Flag = src.Flag;
                     CullMode = src.CullMode;
+                    LightChannelCount = src.LightChannelCount;
                     ZCompLoc = src.ZCompLoc;
                     Dither = src.Dither;
                     TextureIndices = src.TextureIndices;
@@ -4354,6 +4356,7 @@ namespace Hack.io.BMD
                         Name = Name,
                         Flag = Flag,
                         CullMode = CullMode,
+                        LightChannelCount = LightChannelCount,
                         ZCompLoc = ZCompLoc,
                         Dither = Dither,
                         IndTexEntry = IndTexEntry.Clone(),
@@ -4482,7 +4485,7 @@ namespace Hack.io.BMD
                         return false;
                     if (CullMode != right.CullMode)
                         return false;
-                    if (ColorChannelControlsCount != right.ColorChannelControlsCount)
+                    if (LightChannelCount != right.LightChannelCount)
                         return false;
                     if (NumTexGensCount != right.NumTexGensCount)
                         return false;
@@ -4599,7 +4602,7 @@ namespace Hack.io.BMD
                     var hashCode = 1712440529;
                     hashCode = hashCode * -1521134295 + EqualityComparer<string>.Default.GetHashCode(Name);
                     hashCode = hashCode * -1521134295 + Flag.GetHashCode();
-                    hashCode = hashCode * -1521134295 + ColorChannelControlsCount.GetHashCode();
+                    hashCode = hashCode * -1521134295 + LightChannelCount.GetHashCode();
                     hashCode = hashCode * -1521134295 + NumTexGensCount.GetHashCode();
                     hashCode = hashCode * -1521134295 + NumTevStagesCount.GetHashCode();
                     hashCode = hashCode * -1521134295 + CullMode.GetHashCode();
