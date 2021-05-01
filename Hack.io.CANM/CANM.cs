@@ -139,6 +139,7 @@ namespace Hack.io.CANM
             canmFile.Write(Wright, 0, Wright.Length);
 
             canmFile.Write(new byte[] { 0x3D, 0xCC, 0xCC, 0xCD, 0x4E, 0x6E, 0x6B, 0x28, 0xFF, 0xFF, 0xFF, 0xFF }, 0, 12);
+            canmFile.Close();
         }
     }
     /// <summary>
