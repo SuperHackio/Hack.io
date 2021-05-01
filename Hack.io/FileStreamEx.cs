@@ -593,6 +593,16 @@ namespace Hack.io
             FS.Write(new byte[stride], 0, stride);
         }
         /// <summary>
+        /// writes an SByte
+        /// </summary>
+        /// <param name="FS"></param>
+        /// <param name="Data">The SByte</param>
+        [DebuggerStepThrough]
+        public static void WriteSByte(this Stream FS, sbyte Data)
+        {
+            FS.WriteByte((byte)(Data < 0 ? (255 - (Data + 1)) : Data));
+        }
+        /// <summary>
         /// Writes a Colour to a stream
         /// </summary>
         [DebuggerStepThrough]
