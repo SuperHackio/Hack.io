@@ -317,8 +317,9 @@ namespace Hack.io.Util
         /// <param name="image">The image to resize.</param>
         /// <param name="width">The width to resize to.</param>
         /// <param name="height">The height to resize to.</param>
+        /// <param name="InterpolationMode"></param>
         /// <returns>The resized image.</returns>
-        public static Bitmap ResizeImage(Image image, int width, int height)
+        public static Bitmap ResizeImage(Image image, int width, int height, InterpolationMode InterpolationMode = InterpolationMode.HighQualityBicubic)
         {
             Rectangle destRect = new Rectangle(0, 0, width, height);
             Bitmap destImage = new Bitmap(width, height);
@@ -329,7 +330,7 @@ namespace Hack.io.Util
             {
                 graphics.CompositingMode = CompositingMode.SourceCopy;
                 graphics.CompositingQuality = CompositingQuality.HighQuality;
-                graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                graphics.InterpolationMode = InterpolationMode;
                 graphics.SmoothingMode = SmoothingMode.HighQuality;
                 graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
 
