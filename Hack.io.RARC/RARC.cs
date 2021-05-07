@@ -382,7 +382,7 @@ namespace Hack.io.RARC
                 {
                     if (item.Value is File file)
                     {
-                        file.Save(FolderPath+"\\"+file.Name);
+                        file.Save(FolderPath+"/"+file.Name);
                     }
                     else if (item.Value is Directory directory)
                     {
@@ -455,7 +455,7 @@ namespace Hack.io.RARC
             public bool ItemExists(string Path)
             {
                 string[] PathSplit = Path.Split('/');
-                if (PathSplit.Length > 1 && Items[PathSplit[0]] is Directory dir)
+                if (PathSplit.Length > 1 && ItemKeyExists(PathSplit[0]) && Items[PathSplit[0]] is Directory dir)
                     return dir.ItemExists(Path.Substring(PathSplit[0].Length + 1));
                 else if (PathSplit.Length > 1)
                     return false;
