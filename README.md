@@ -14,11 +14,18 @@ Hack.io is the base library used by all the other Hack.io libraries.
 - **Hack.io.BCK**<br/>
 Bone Animations for J3D Models (SMG/SMG2, SMS, Pikmin, etc.)
 
+- **Hack.io.BMD**<br/>
+Library for J3D Models (SMG/SMG2, SMS, Pikmin, etc.)<br/>
+Heavily based on SuperBMD, but only does Read/Write to/from BMD/BDL. (no model importing and no model exporting)
+
 - **Hack.io.BTK**<br/>
 Texture Position Animations for J3D Models (SMG/SMG2, SMS, Pikmin, etc.)
 
 - **Hack.io.BRK**<br/>
 Colour Register Animations for J3D Models (SMG/SMG2, SMS, Pikmin, etc.)
+
+- **Hack.io.BTI**<br/>
+Library for the BTI image format. Supports all image formats and mipmaps
 
 - **Hack.io.BTP**<br/>
 Frame Animations for J3D Models (SMG/SMG2, SMS, etc.)<br/>
@@ -58,4 +65,4 @@ For Library specific tutorials, please visit it's corresponding Wiki Page.
 - tarsa129 - Code reference for Hack.io.BCK because NoClip wasn't enough
 - Old SMG Researchers - File formats for Hack.io.CANM, Hack.io.BCSV & Hack.io.RARC
 - Gericom - Quick YAZ0 Compression
-- Daniel-McCarthy - YAY0 and YAZ0 Compression
+- Daniel-McCarthy - YAY0 Compression
