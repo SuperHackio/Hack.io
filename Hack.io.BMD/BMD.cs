@@ -6850,7 +6850,7 @@ namespace Hack.io.BMD
             }
             throw new Exception("Bruh moment!!");
         }
-        public static OpenTK.Graphics.OpenGL.TextureWrapMode FromGXToOpenTK(J3D.JUtility.GXWrapMode Type)
+        public static OpenTK.Graphics.OpenGL.TextureWrapMode FromGXToOpenTK(GXWrapMode Type)
         {
             switch (Type)
             {
