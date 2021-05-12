@@ -207,6 +207,95 @@ namespace Hack.io.J3D
     public static class JUtility
     {
         #region Imaging
+        public static Bitmap DecodeImage(Stream TextureFile, byte[] PaletteData, GXImageFormat Format, GXPaletteFormat? PaletteFormat, int? PaletteCount, int ImageWidth, int ImageHeight, int Mipmap)
+        {
+            Bitmap Result = null;
+            byte[] ImageData = null;
+
+            for (int i = 0; i < Mipmap; i++)
+            {
+                ImageWidth = (ushort)(ImageWidth / 2);
+                ImageHeight = (ushort)(ImageHeight / 2);
+            }
+            int oldWidth = ImageWidth % 4 != 0 ? (ImageWidth / 4) * 4 + 4 : ImageWidth;
+            int FullWidth = oldWidth % 8 != 0 ? (oldWidth / 8) * 8 + 8 : oldWidth;
+
+            int oldHeight = ImageHeight % 4 != 0 ? (ImageHeight / 4) * 4 + 4 : ImageHeight;
+            int FullHeight = oldHeight % 8 != 0 ? (oldHeight / 8) * 8 + 8 : oldHeight;
+            switch (Format)
+            {
+                case GXImageFormat.I4:
+                    #region DecodeI4
+                    ImageData = TextureFile.Read(0, (FullWidth * FullHeight) / 2);
+                    Result = DecodeImage(ImageData, null, Format, null, null, ImageWidth, ImageHeight);
+                    #endregion
+                    break;
+                case GXImageFormat.I8:
+                    #region DecodeI8
+                    ImageData = TextureFile.Read(0, FullWidth * FullHeight);
+                    Result = DecodeImage(ImageData, null, Format, null, null, ImageWidth, ImageHeight);
+                    #endregion
+                    break;
+                case GXImageFormat.IA4:
+                    #region DecodeIA4
+                    ImageData = TextureFile.Read(0, FullWidth * FullHeight);
+                    Result = DecodeImage(ImageData, null, Format, null, null, ImageWidth, ImageHeight);
+                    #endregion
+                    break;
+                case GXImageFormat.IA8:
+                    #region DecodeIA8
+                    ImageData = TextureFile.Read(0, (FullWidth * FullHeight) * 2);
+                    Result = DecodeImage(ImageData, null, Format, null, null, ImageWidth, ImageHeight);
+                    #endregion
+                    break;
+                case GXImageFormat.RGB565:
+                    #region DecodeRGB565
+                    ImageData = TextureFile.Read(0, (FullWidth * FullHeight) * 2);
+                    Result = DecodeImage(ImageData, null, Format, null, null, ImageWidth, ImageHeight);
+                    #endregion
+                    break;
+                case GXImageFormat.RGB5A3:
+                    #region DecodeRGB5A3
+                    ImageData = TextureFile.Read(0, (FullWidth * FullHeight) * 2);
+                    Result = DecodeImage(ImageData, null, Format, null, null, ImageWidth, ImageHeight);
+                    #endregion
+                    break;
+                case GXImageFormat.RGBA32:
+                    #region DecodeRGBA32
+                    ImageData = TextureFile.Read(0, (FullWidth * FullHeight) * 4);
+                    Result = DecodeImage(ImageData, null, Format, null, null, ImageWidth, ImageHeight);
+                    #endregion
+                    break;
+                case GXImageFormat.C4:
+                    #region DecodeC4
+                    ImageData = TextureFile.Read(0, (FullWidth * FullHeight) / 2);
+                    Result = DecodeImage(ImageData, PaletteData, Format, PaletteFormat, PaletteCount, ImageWidth, ImageHeight);
+                    #endregion
+                    break;
+                case GXImageFormat.C8:
+                    #region DecodeC8
+                    ImageData = TextureFile.Read(0, FullWidth * FullHeight);
+                    Result = DecodeImage(ImageData, PaletteData, Format, PaletteFormat, PaletteCount, ImageWidth, ImageHeight);
+                    #endregion
+                    break;
+                case GXImageFormat.C14X2:
+                    #region DecodeC14X2
+                    ImageData = TextureFile.Read(0, (FullWidth * FullHeight) * 2);
+                    Result = DecodeImage(ImageData, PaletteData, Format, PaletteFormat, PaletteCount, ImageWidth, ImageHeight);
+                    #endregion
+                    break;
+                case GXImageFormat.CMPR:
+                    #region DecodeDXT1
+                    int BytesNeededForEncode = FullWidth * FullHeight * 4 / 8;
+                    ImageData = TextureFile.Read(0, BytesNeededForEncode);
+                    Result = DecodeImage(ImageData, null, Format, null, null, ImageWidth, ImageHeight);
+                    #endregion
+                    break;
+                default:
+                    throw new Exception($"Invalid format {Format.ToString()}");
+            }
+            return Result;
+        }
         /// <summary>
         /// 
         /// </summary>
@@ -224,32 +313,27 @@ namespace Hack.io.J3D
             if (PaletteData != null)
                 PaletteColours = DecodePalette(PaletteData, PaletteFormat, ColourCounts, Format);
             int BlockWidth = FormatDetails[Format].Item1, BlockHeight = FormatDetails[Format].Item2, BlockDataSize = Format == GXImageFormat.RGBA32 ? 64 : 32,
-                offset = 0, BlockX = 0, BlockY = 0, ActiveX = 0, ActiveY = 0;
+                offset = 0, BlockX = 0, BlockY = 0, XInBlock = 0, YInBlock = 0;
             Bitmap Result = new Bitmap(Width, Height, PixelFormat.Format32bppArgb);
             //Lord why can't Bitmap.SetPixel be fast? :weary:
             BitmapData BitMapData = Result.LockBits(new Rectangle(0, 0, Width, Height), ImageLockMode.ReadWrite, PixelFormat.Format32bppArgb);
             IntPtr BitmapPointer = BitMapData.Scan0;
             byte[] Pixels = new byte[Width * Height * 4];
             Marshal.Copy(BitmapPointer, Pixels, 0, Pixels.Length);
-
             while (BlockY < Height)
             {
                 Color[] PixelData = DecodeBlock(ImageData, Format, offset, BlockDataSize, PaletteColours);
-                if (Format == GXImageFormat.RGBA32)
-                {
 
-                }
                 for (int i = 0; i < PixelData.Length; i++)
                 {
-                    ActiveX = (i % BlockWidth);// + BlockX;
-                    ActiveY = ((int)Math.Floor(i / (double)BlockWidth));// + BlockY;
-                    if (ActiveX >= Width || ActiveY >= Height)
+                    XInBlock = (i % BlockWidth);
+                    YInBlock = i / BlockWidth;
+                    int xpos = BlockX + XInBlock;
+                    int ypos = BlockY + YInBlock;
+                    if (xpos >= Width || ypos >= Height)
                         continue;
-                    int xpos = BlockX + ActiveX;
-                    int ypos = BlockY + ActiveY;
                     int Start = ((ypos * Width) + xpos) * 4;
-                    if (Start >= Pixels.Length)
-                        break;
+
                     Pixels[Start] = PixelData[i].B;
                     Pixels[Start + 1] = PixelData[i].G;
                     Pixels[Start + 2] = PixelData[i].R;
@@ -353,8 +437,7 @@ namespace Hack.io.J3D
                     break;
                 case GXImageFormat.RGBA32:
                     for (int i = 0; i < 16; i++)
-                        if (Offset + i * 2 < ImageData.Length)
-                            Result.Add(Color.FromArgb(ImageData[Offset + (i * 2)], ImageData[Offset + (i * 2) + 1], ImageData[Offset + (i * 2) + 32], ImageData[Offset + (i * 2) + 33]));
+                        Result.Add(Color.FromArgb(ImageData[Offset + (i * 2)], ImageData[Offset + (i * 2) + 1], ImageData[Offset + (i * 2) + 32], ImageData[Offset + (i * 2) + 33]));
                     break;
                 case GXImageFormat.C4:
                     for (int i = 0; i < BlockSize; i++)
