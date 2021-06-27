@@ -783,12 +783,14 @@ namespace Hack.io.J3D
                     #region Encode RGBA32
                     for (int i = 0; i < 16; i++)
                     {
-                        int x = BlockX + (i % CurrentBlockWidth), y = BlockY + ((int)Math.Floor((decimal)i / CurrentBlockWidth));
-                        if (x >= Image.Width || y > Image.Height)
+                        int x = BlockX + (i % CurrentBlockWidth), 
+                            y = BlockY + ((int)Math.Floor((decimal)i / CurrentBlockWidth));
+
+                        PixelIndex = ((y * Image.Width) + x) * 4;
+                        if (x >= Image.Width || y > Image.Height || PixelIndex >= Pixels.Length)
                             Value = new byte[4] { 0xFF, 0xFF, 0xFF, 0xFF }; //If you've been reading this whole thing you'd know what this is for
                         else
                         {
-                            PixelIndex = ((y * Image.Width) + x) * 4;
                             Value = new byte[4] { Pixels[PixelIndex + 3], Pixels[PixelIndex + 2], Pixels[PixelIndex + 1], Pixels[PixelIndex] };
                         }
                         EncodedBlock[i * 2] = Value[0];
