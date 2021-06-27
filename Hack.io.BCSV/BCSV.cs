@@ -224,6 +224,24 @@ namespace Hack.io.BCSV
                 Fields.Add(array[i].HashName, array[i]);
         }
         /// <summary>
+        /// Insert a BCSVEntry to the Entry List at a specified position
+        /// </summary>
+        /// <param name="index">The Index to add the new entry at</param>
+        /// <param name="entry">Entry to add</param>
+        public void Insert(int index, BCSVEntry entry) => Entries.Insert(index, entry);
+        /// <summary>
+        /// Add multiple BCSVEntry objects at once to the Entry List at a specified position
+        /// </summary>
+        /// <param name="index">The Index to add the new entries at</param>
+        /// <param name="list">List of entries to add</param>
+        public void InsertRange(int index, List<BCSVEntry> list) => Entries.InsertRange(index, list);
+        /// <summary>
+        /// Add multiple BCSVEntry objects at once to the Entry List at a specified position
+        /// </summary>
+        /// <param name="index">The Index to add the new entries at</param>
+        /// <param name="array">Array of entries to add</param>
+        public void InsertRange(int index, BCSVEntry[] array) => Entries.InsertRange(index, array);
+        /// <summary>
         /// Remove the BCSVEntry at the given index
         /// </summary>
         /// <param name="index">index to remove at</param>
