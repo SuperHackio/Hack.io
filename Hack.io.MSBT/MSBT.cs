@@ -45,6 +45,24 @@ namespace Hack.io.MSBT
             Write(FS);
             FS.Close();
         }
+        public List<Label> GetSortedLabels
+        {
+            get
+            {
+                List<Label> Result = new List<Label>();
+                for (int i = 0; i < Messages.Count; i++)
+                {
+                    Result.Add(Messages[i]);
+                }
+                Result.Sort(LabelSortDelegate);
+                return Result;
+            }
+        }
+
+        private int LabelSortDelegate(Label x, Label y)
+        {
+            return x.Name.CompareTo(y.Name);
+        }
 
         private void Read(Stream FS)
         {
@@ -825,8 +843,8 @@ namespace Hack.io.MSBT
         {
             WAIT = 0,
             PRESS_A = 1,
-            UNKNOWN2 = 2,
-            UNKNOWN3 = 3
+            YCENTER = 2,
+            XCENTER = 3
         }
 
         public enum TextColour : short
