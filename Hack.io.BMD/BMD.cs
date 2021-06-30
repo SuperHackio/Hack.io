@@ -2825,7 +2825,7 @@ namespace Hack.io.BMD
                 set
                 {
                     if (!(value is Material || value is null))
-                        return;
+                        throw new ArgumentException("Value is not a Material!", "value");
                     for (int i = 0; i < m_Materials.Count; i++)
                     {
                         if (m_Materials[i].Name.Equals(MaterialName))
@@ -2841,7 +2841,21 @@ namespace Hack.io.BMD
                         m_Materials.Add(value);
                 }
             }
-            public Material this[int Index] => m_Materials[Index];
+            public Material this[int Index]
+            {
+                get
+                {
+                    return m_Materials[Index];
+                }
+                set
+                {
+                    if (!(value is Material || value is null))
+                        throw new ArgumentException("Value is not a Material!", "value");
+
+                    m_Materials[Index] = value;
+                }
+            }
+
             public int Count => m_Materials.Count;
             #endregion
 
@@ -3238,7 +3252,7 @@ namespace Hack.io.BMD
                 mat.ZCompLoc = m_zCompLocBlock[reader.ReadByte()];
                 mat.ZMode = m_zModeBlock[reader.ReadByte()];
 
-                if (m_ditherBlock == null)
+                if (m_ditherBlock == null || m_ditherBlock.Count == 0)
                     reader.Position++;
                 else
                     mat.Dither = m_ditherBlock[reader.ReadByte()];
@@ -3406,10 +3420,17 @@ namespace Hack.io.BMD
                     }
                 }
 
-                mat.FogInfo = m_FogBlock[BitConverter.ToInt16(reader.ReadReverse(0, 2), 0)];
+                if (m_FogBlock.Count == 0)
+                    reader.Position += 0x02;
+                else
+                    mat.FogInfo = m_FogBlock[BitConverter.ToInt16(reader.ReadReverse(0, 2), 0)];
                 mat.AlphCompare = m_AlphaCompBlock[BitConverter.ToInt16(reader.ReadReverse(0, 2), 0)];
                 mat.BMode = m_blendModeBlock[BitConverter.ToInt16(reader.ReadReverse(0, 2), 0)];
-                mat.NBTScale = m_NBTScaleBlock[BitConverter.ToInt16(reader.ReadReverse(0, 2), 0)];
+
+                if (m_NBTScaleBlock.Count == 0)
+                    reader.Position += 0x02;
+                else
+                    mat.NBTScale = m_NBTScaleBlock[BitConverter.ToInt16(reader.ReadReverse(0, 2), 0)];
                 m_Materials.Add(mat);
             }
             private static List<Color4> ReadColours(Stream reader, int offset, int size, bool IsInt16 = false)
@@ -4683,7 +4704,7 @@ namespace Hack.io.BMD
                             TevStages[i] = new IndirectTevStage(
                                 TevStageId.TevStage0,
                                 IndirectFormat.ITF_8,
-                                IndirectBias.ITB_S,
+                                IndirectBias.S,
                                 IndirectMatrix.ITM_OFF,
                                 IndirectWrap.ITW_OFF,
                                 IndirectWrap.ITW_OFF,
@@ -5053,13 +5074,14 @@ namespace Hack.io.BMD
                     }
                     public enum IndirectBias
                     {
-                        ITB_S,
-                        ITB_T,
-                        ITB_ST,
-                        ITB_U,
-                        ITB_SU,
-                        ITB_TU,
-                        ITB_STU
+                        None,
+                        S,
+                        T,
+                        ST,
+                        U,
+                        SU,
+                        TU,
+                        STU
                     }
                     public enum IndirectAlpha
                     {
