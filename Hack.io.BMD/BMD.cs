@@ -6885,6 +6885,83 @@ namespace Hack.io.BMD
             }
             throw new Exception("Bruh moment!!");
         }
+        public static OpenTK.Graphics.OpenGL.TextureMinFilter FromGXToOpenTK_Min(GXFilterMode Type)
+        {
+            switch (Type)
+            {
+                case GXFilterMode.Nearest:
+                    return OpenTK.Graphics.OpenGL.TextureMinFilter.Nearest;
+                case GXFilterMode.Linear:
+                    return OpenTK.Graphics.OpenGL.TextureMinFilter.Linear;
+                case GXFilterMode.NearestMipmapNearest:
+                    return OpenTK.Graphics.OpenGL.TextureMinFilter.NearestMipmapNearest;
+                case GXFilterMode.NearestMipmapLinear:
+                    return OpenTK.Graphics.OpenGL.TextureMinFilter.NearestMipmapLinear;
+                case GXFilterMode.LinearMipmapNearest:
+                    return OpenTK.Graphics.OpenGL.TextureMinFilter.LinearMipmapNearest;
+                case GXFilterMode.LinearMipmapLinear:
+                    return OpenTK.Graphics.OpenGL.TextureMinFilter.LinearMipmapLinear;
+            }
+            throw new Exception("Bruh moment!!");
+        }
+        public static OpenTK.Graphics.OpenGL.TextureMagFilter FromGXToOpenTK_Mag(GXFilterMode Type)
+        {
+            switch (Type)
+            {
+                case GXFilterMode.Nearest:
+                    return OpenTK.Graphics.OpenGL.TextureMagFilter.Nearest;
+                case GXFilterMode.Linear:
+                    return OpenTK.Graphics.OpenGL.TextureMagFilter.Linear;
+                case GXFilterMode.NearestMipmapNearest:
+                case GXFilterMode.NearestMipmapLinear:
+                case GXFilterMode.LinearMipmapNearest:
+                case GXFilterMode.LinearMipmapLinear:
+                    break;
+            }
+            throw new Exception("Bruh moment!!");
+        }
+        public static OpenTK.Graphics.OpenGL.CullFaceMode? FromGXToOpenTK(MAT3.CullMode Type)
+        {
+            switch (Type)
+            {
+                case MAT3.CullMode.None:
+                    return null;
+                case MAT3.CullMode.Front:
+                    return OpenTK.Graphics.OpenGL.CullFaceMode.Back;
+                case MAT3.CullMode.Back:
+                    return OpenTK.Graphics.OpenGL.CullFaceMode.Front;
+                case MAT3.CullMode.All:
+                    return OpenTK.Graphics.OpenGL.CullFaceMode.FrontAndBack;
+            }
+            throw new Exception("Bruh moment!!");
+        }
+        public static OpenTK.Graphics.OpenGL.BlendingFactor FromGXToOpenTK(MAT3.Material.BlendMode.BlendModeControl Factor)
+        {
+            switch (Factor)
+            {
+                case MAT3.Material.BlendMode.BlendModeControl.Zero:
+                    return OpenTK.Graphics.OpenGL.BlendingFactor.Zero;
+                case MAT3.Material.BlendMode.BlendModeControl.One:
+                    return OpenTK.Graphics.OpenGL.BlendingFactor.One;
+                case MAT3.Material.BlendMode.BlendModeControl.SrcColor:
+                    return OpenTK.Graphics.OpenGL.BlendingFactor.SrcColor;
+                case MAT3.Material.BlendMode.BlendModeControl.InverseSrcColor:
+                    return OpenTK.Graphics.OpenGL.BlendingFactor.OneMinusSrcColor;
+                case MAT3.Material.BlendMode.BlendModeControl.SrcAlpha:
+                    return OpenTK.Graphics.OpenGL.BlendingFactor.SrcAlpha;
+                case MAT3.Material.BlendMode.BlendModeControl.InverseSrcAlpha:
+                    return OpenTK.Graphics.OpenGL.BlendingFactor.OneMinusSrcAlpha;
+                case MAT3.Material.BlendMode.BlendModeControl.DstAlpha:
+                    return OpenTK.Graphics.OpenGL.BlendingFactor.DstAlpha;
+                case MAT3.Material.BlendMode.BlendModeControl.InverseDstAlpha:
+                    return OpenTK.Graphics.OpenGL.BlendingFactor.OneMinusDstAlpha;
+                default:
+                    Console.WriteLine("Unsupported BlendModeControl: \"{0}\" in FromGXToOpenTK!", Factor);
+                    return OpenTK.Graphics.OpenGL.BlendingFactor.SrcAlpha;
+
+            }
+        }
+
 
         //=====================================================================
 
