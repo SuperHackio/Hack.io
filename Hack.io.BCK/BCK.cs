@@ -13,8 +13,8 @@ namespace Hack.io.BCK
     /// </summary>
     public class BCK
     {
-        private readonly static string Magic = "J3D1bck1";
-        private readonly static string Magic2 = "ANK1";
+        private const string Magic = "J3D1bck1";
+        private const string Magic2 = "ANK1";
         /// <summary>
         /// The name of this BCK
         /// </summary>

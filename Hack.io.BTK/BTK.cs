@@ -35,8 +35,8 @@ namespace Hack.io.BTK
         /// </summary>
         public List<Animation> TextureAnimations { get; set; } = new List<Animation>();
 
-        private readonly static string Magic = "J3D1btk1";
-        private readonly static string Magic2 = "TTK1";
+        private const string Magic = "J3D1btk1";
+        private const string Magic2 = "TTK1";
 
         /// <summary>
         /// Create an Empty BTK

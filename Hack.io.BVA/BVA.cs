@@ -30,8 +30,8 @@ namespace Hack.io.BVA
         /// </summary>
         public List<Animation> VisibilityAnimations { get; set; } = new List<Animation>();
 
-        private readonly static string Magic = "J3D1bva1";
-        private readonly static string Magic2 = "VAF1";
+        private const string Magic = "J3D1bva1";
+        private const string Magic2 = "VAF1";
 
         /// <summary>
         /// Create an Empty BVA

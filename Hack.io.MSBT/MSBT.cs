@@ -26,8 +26,8 @@ namespace Hack.io.MSBT
         /// <summary>
         /// File Identifier
         /// </summary>
-        private static readonly string Magic = "MsgStdBn";
-        private static readonly ushort SectionCount = 3;
+        private const string Magic = "MsgStdBn";
+        private const ushort SectionCount = 3;
 
         public MSBT(string file)
         {

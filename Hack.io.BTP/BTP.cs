@@ -30,8 +30,8 @@ namespace Hack.io.BTP
         /// </summary>
         public List<Animation> TextureAnimations { get; set; } = new List<Animation>();
 
-        private readonly static string Magic = "J3D1btp1";
-        private readonly static string Magic2 = "TPT1";
+        private const string Magic = "J3D1btp1";
+        private const string Magic2 = "TPT1";
 
         /// <summary>
         /// Create an Empty BTP

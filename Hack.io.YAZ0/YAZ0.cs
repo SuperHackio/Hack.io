@@ -13,7 +13,7 @@ namespace Hack.io.YAZ0
     /// </summary>
     public static class YAZ0
     {
-        private static readonly string Magic = "Yaz0";
+        private const string Magic = "Yaz0";
         /// <summary>
         /// Decompress a File
         /// </summary>

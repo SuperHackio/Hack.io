@@ -34,8 +34,8 @@ namespace Hack.io.BRK
         /// </summary>
         public List<Animation> ConstantColourAnimations { get; set; } = new List<Animation>();
 
-        private readonly static string Magic = "J3D1brk1";
-        private readonly static string Magic2 = "TRK1";
+        private const string Magic = "J3D1brk1";
+        private const string Magic2 = "TRK1";
 
         /// <summary>
         /// Create an Empty BRK

@@ -30,8 +30,8 @@ namespace Hack.io.BPK
         /// </summary>
         public List<Animation> ColourAnimations { get; set; } = new List<Animation>();
 
-        private readonly string Magic = "J3D1bpk1";
-        private readonly string Magic2 = "PAK1";
+        private const string Magic = "J3D1bpk1";
+        private const string Magic2 = "PAK1";
         /// <summary>
         /// Create a new BPK file
         /// </summary>
