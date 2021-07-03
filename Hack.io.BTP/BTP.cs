@@ -16,7 +16,7 @@ namespace Hack.io.BTP
         /// <summary>
         /// Filename of this BTP file.<para/>Set using <see cref="Save(string)"/>;
         /// </summary>
-        public string FileName { get; private set; } = null;
+        public string Name { get; private set; } = null;
         /// <summary>
         /// Loop Mode of the BRK animation. See the <seealso cref="LoopMode"/> enum for values
         /// </summary>
@@ -44,6 +44,55 @@ namespace Hack.io.BTP
         public BTP(string filename)
         {
             FileStream BTPFile = new FileStream(filename, FileMode.Open);
+            Read(BTPFile);
+            BTPFile.Close();
+            Name = filename;
+        }
+        /// <summary>
+        /// Open a BTP from a stream
+        /// </summary>
+        /// <param name="BTPFile"></param>
+        ///<param name="filename"></param>
+        public BTP(Stream BTPFile, string filename = null)
+        {
+            Read(BTPFile);
+            Name = filename;
+        }
+        /// <summary>
+        /// Save the BTPto a file
+        /// </summary>
+        /// <param name="Filename">New file to save to</param>
+        public void Save(string Filename = null)
+        {
+            if (Name == null && Filename == null)
+                throw new Exception("No Filename has been given");
+            else if (Filename != null)
+                Name = Filename;
+
+            FileStream BTPFile = new FileStream(Filename, FileMode.Create);
+
+            Write(BTPFile);
+
+            BTPFile.Close();
+        }
+        /// <summary>
+        /// Save the BTP file to a memorystream
+        /// </summary>
+        /// <returns></returns>
+        public MemoryStream Save()
+        {
+            MemoryStream MS = new MemoryStream();
+            Write(MS);
+            return MS;
+        }
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <returns></returns>
+        public override string ToString() => $"{new FileInfo(Name).Name} {(TextureAnimations.Count > 0 ? $"[{TextureAnimations.Count} Texture Animation{(TextureAnimations.Count > 1 ? "s" : "")}] " : "")}";
+
+        private void Read(Stream BTPFile)
+        {
             if (BTPFile.ReadString(8) != Magic)
                 throw new Exception($"Invalid Identifier. Expected \"{Magic}\"");
 
@@ -101,35 +150,22 @@ namespace Hack.io.BTP
 
                 TextureAnimations.Add(Anim);
             }
-
-            BTPFile.Close();
-            FileName = filename;
         }
-        /// <summary>
-        /// Save the BTPto a file
-        /// </summary>
-        /// <param name="Filename">New file to save to</param>
-        public void Save(string Filename = null)
+
+        private void Write(Stream BTPFile)
         {
-            if (FileName == null && Filename == null)
-                throw new Exception("No Filename has been given");
-            else if (Filename != null)
-                FileName = Filename;
-
             string Padding = "Hack.io.BTP © Super Hackio Incorporated 2019-2020";
-            FileStream BTPFile = new FileStream(Filename, FileMode.Create);
-
             BTPFile.WriteString(Magic);
             BTPFile.Write(new byte[8] { 0xDD, 0xDD, 0xDD, 0xDD, 0x00, 0x00, 0x00, 0x01 }, 0, 8);
             BTPFile.Write(new byte[16] { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, }, 0, 16);
-            
+
             uint TPT1Start = (uint)BTPFile.Position;
             BTPFile.WriteString(Magic2);
             BTPFile.Write(new byte[4] { 0xDD, 0xDD, 0xDD, 0xDD }, 0, 4);
             BTPFile.WriteByte((byte)Loop);
             BTPFile.WriteByte(0xFF);
             BTPFile.WriteReverse(BitConverter.GetBytes(Time), 0, 2);
-            
+
             BTPFile.WriteReverse(BitConverter.GetBytes((ushort)TextureAnimations.Count), 0, 2);
             List<ushort> FullTexIDList = new List<ushort>();
             for (int i = 0; i < TextureAnimations.Count; i++)
@@ -215,16 +251,9 @@ namespace Hack.io.BTP
 
             BTPFile.Position = 0x08;
             BTPFile.WriteReverse(BitConverter.GetBytes((uint)BTPFile.Length), 0, 4);
-            BTPFile.Position = TPT1Start+0x04;
-            BTPFile.WriteReverse(BitConverter.GetBytes((uint)(BTPFile.Length-TPT1Start)), 0, 4);
-
-            BTPFile.Close();
+            BTPFile.Position = TPT1Start + 0x04;
+            BTPFile.WriteReverse(BitConverter.GetBytes((uint)(BTPFile.Length - TPT1Start)), 0, 4);
         }
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <returns></returns>
-        public override string ToString() => $"{new FileInfo(FileName).Name} {(TextureAnimations.Count > 0 ? $"[{TextureAnimations.Count} Texture Animation{(TextureAnimations.Count > 1 ? "s" : "")}] " : "")}";
 
         /// <summary>
         /// Animation Container
@@ -286,5 +315,27 @@ namespace Hack.io.BTP
 
             return (short)FullList.SubListIndex(0, currentSequence);
         }
+
+        //=====================================================================
+
+        /// <summary>
+        /// Cast a BTPK to a RARCFile
+        /// </summary>
+        /// <param name="x"></param>
+        public static implicit operator RARC.RARC.File(BTP x)
+        {
+            return new RARC.RARC.File(x.Name, x.Save());
+        }
+
+        /// <summary>
+        /// Cast a RARCFile to a BTP
+        /// </summary>
+        /// <param name="x"></param>
+        public static implicit operator BTP(RARC.RARC.File x)
+        {
+            return new BTP((MemoryStream)x, x.Name);
+        }
+
+        //=====================================================================
     }
 }
