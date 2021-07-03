@@ -71,6 +71,7 @@ namespace Hack.io.BMD
             Shapes = new SHP1(BMD);
             SkinningEnvelopes.SetInverseBindMatrices(Joints.FlatSkeleton);
             Shapes.SetVertexWeights(SkinningEnvelopes, PartialWeightData);
+            Joints.InitBoneFamilies(Scenegraph);
             Materials = new MAT3(BMD);
             if (BitConverter.ToInt32(BMD.ReadReverse(0, 4), 0) == 0x4D444C33)
             {
@@ -1489,7 +1490,7 @@ namespace Hack.io.BMD
             public class Bone
             {
                 public string Name { get; private set; }
-                public Bone Parent { get; private set; }
+                public Bone Parent { get; internal set; }
                 public List<Bone> Children { get; private set; }
                 public Matrix4 InverseBindMatrix { get; private set; }
                 public Matrix4 TransformationMatrix { get; private set; }
@@ -1810,6 +1811,31 @@ namespace Hack.io.BMD
                 writer.Seek((int)start + 4, SeekOrigin.Begin);
                 writer.WriteReverse(BitConverter.GetBytes((int)length), 0, 4);
                 writer.Seek((int)end, SeekOrigin.Begin);
+            }
+
+            public void InitBoneFamilies(INF1 Scenegraph)
+            {
+                List<EVP1.Bone> processedJoints = new List<EVP1.Bone>();
+                IterateHierarchyForSkeletonRecursive(Scenegraph.Root, processedJoints, -1);
+            }
+            private void IterateHierarchyForSkeletonRecursive(INF1.Node curNode, List<EVP1.Bone> processedJoints, int parentIndex)
+            {
+                switch (curNode.Type)
+                {
+                    case INF1.NodeType.Joint:
+                        EVP1.Bone joint = FlatSkeleton[curNode.Index];
+
+                        if (parentIndex >= 0)
+                        {
+                            joint.Parent = processedJoints[parentIndex];
+                        }
+                        processedJoints.Add(joint);
+                        break;
+                }
+
+                parentIndex = processedJoints.Count - 1;
+                foreach (var child in curNode.Children)
+                    IterateHierarchyForSkeletonRecursive(child, processedJoints, parentIndex);
             }
         }
         public class SHP1
@@ -7002,6 +7028,7 @@ namespace Hack.io.BMD
             Shapes = new SHP1(BDLFile);
             SkinningEnvelopes.SetInverseBindMatrices(Joints.FlatSkeleton);
             Shapes.SetVertexWeights(SkinningEnvelopes, PartialWeightData);
+            Joints.InitBoneFamilies(Scenegraph);
             Materials = new MAT3(BDLFile);
             MatDisplayList = new MDL3(BDLFile);
             Textures = new TEX1(BDLFile);
