@@ -4310,7 +4310,7 @@ namespace Hack.io.BMD
                     NBTScale = src.NBTScale;
                 }
 
-                public void AddChannelControl(J3DColorChannelId id, bool enable, ChannelControl.ColorSrc MatSrcColor, ChannelControl.LightId litId, ChannelControl.DiffuseFn diffuse, ChannelControl.J3DAttenuationFn atten, ChannelControl.ColorSrc ambSrcColor)
+                public void AddChannelControl(TevOrder.GXColorChannelId id, bool enable, ChannelControl.ColorSrc MatSrcColor, ChannelControl.LightId litId, ChannelControl.DiffuseFn diffuse, ChannelControl.J3DAttenuationFn atten, ChannelControl.ColorSrc ambSrcColor)
                 {
                     ChannelControl control = new ChannelControl
                     {
@@ -4667,7 +4667,7 @@ namespace Hack.io.BMD
                     /// </summary>
                     public byte IndTexStageNum;
 
-                    public IndirectTevOrder[] TevOrders;
+                    public IndirectTevOrder?[] TevOrders;
 
                     /// <summary>
                     /// The dynamic 2x3 matrices to use when transforming the texture coordinates
@@ -4687,8 +4687,8 @@ namespace Hack.io.BMD
                         HasLookup = false;
                         IndTexStageNum = 0;
 
-                        TevOrders = new IndirectTevOrder[4];
-                        for (int i = 0; i < 4; i++)
+                        TevOrders = new IndirectTevOrder?[16];
+                        for (int i = 0; i < 16; i++)
                             TevOrders[i] = new IndirectTevOrder(TexCoordId.Null, TexMapId.Null);
 
                         Matrices = new IndirectTexMatrix[3];
@@ -4719,9 +4719,15 @@ namespace Hack.io.BMD
                         IndTexStageNum = (byte)reader.ReadByte();
                         reader.Position += 0x02;
 
-                        TevOrders = new IndirectTevOrder[4];
-                        for (int i = 0; i < 4; i++)
-                            TevOrders[i] = new IndirectTevOrder(reader);
+                        TevOrders = new IndirectTevOrder?[16];
+                        for (int i = 0; i < 16; i++)
+                        {
+                            short val = BitConverter.ToInt16(reader.ReadReverse(0, 2), 0);
+                            reader.Position -= 0x02;
+                            if (val >= 0)
+                                TevOrders[i] = new IndirectTevOrder(reader);
+
+                        }
 
                         Matrices = new IndirectTexMatrix[3];
                         for (int i = 0; i < 3; i++)
@@ -4744,7 +4750,7 @@ namespace Hack.io.BMD
                         writer.Write(new byte[2] { 0xFF, 0xFF }, 0, 2);
 
                         for (int i = 0; i < 4; i++)
-                            TevOrders[i].Write(writer);
+                            TevOrders[i].Value.Write(writer);
 
                         for (int i = 0; i < 3; i++)
                             Matrices[i].Write(writer);
@@ -4758,13 +4764,13 @@ namespace Hack.io.BMD
 
                     public IndirectTexturing Clone()
                     {
-                        IndirectTevOrder[] NewOrders = new IndirectTevOrder[TevOrders.Length];
+                        IndirectTevOrder?[] NewOrders = new IndirectTevOrder?[TevOrders.Length];
                         IndirectTexMatrix[] NewMatrix = new IndirectTexMatrix[Matrices.Length];
                         IndirectTexScale[] NewScales = new IndirectTexScale[Scales.Length];
                         IndirectTevStage[] NewStages = new IndirectTevStage[TevStages.Length];
 
                         for (int i = 0; i < TevOrders.Length; i++)
-                            NewOrders[i] = new IndirectTevOrder(TevOrders[i].TexCoord, TevOrders[i].TexMap);
+                            NewOrders[i] = new IndirectTevOrder(TevOrders[i].Value.TexCoord, TevOrders[i].Value.TexMap);
 
                         for (int i = 0; i < Matrices.Length; i++)
                             NewMatrix[i] = new IndirectTexMatrix(new Matrix2x3(Matrices[i].Matrix.M11, Matrices[i].Matrix.M12, Matrices[i].Matrix.M13, Matrices[i].Matrix.M21, Matrices[i].Matrix.M22, Matrices[i].Matrix.M23), Matrices[i].Exponent);
@@ -4773,7 +4779,7 @@ namespace Hack.io.BMD
                             NewScales[i] = new IndirectTexScale(Scales[i].ScaleS, Scales[i].ScaleT);
 
                         for (int i = 0; i < TevStages.Length; i++)
-                            NewStages[i] = new IndirectTevStage(TevStages[i].TevStage, TevStages[i].IndTexFormat, TevStages[i].IndTexBiasSel, TevStages[i].IndTexMtxId, TevStages[i].IndTexWrapS, TevStages[i].IndTexWrapT, TevStages[i].AddPrev, TevStages[i].UtcLod, TevStages[i].AlphaSel);
+                            NewStages[i] = new IndirectTevStage(TevStages[i].TevStageID, TevStages[i].IndTexFormat, TevStages[i].IndTexBias, TevStages[i].IndTexMtxId, TevStages[i].IndTexWrapS, TevStages[i].IndTexWrapT, TevStages[i].AddPrev, TevStages[i].UtcLod, TevStages[i].AlphaSel);
 
                         return new IndirectTexturing() { HasLookup = HasLookup, IndTexStageNum = IndTexStageNum, TevOrders = NewOrders, Matrices = NewMatrix, Scales = NewScales, TevStages = NewStages };
                     }
@@ -4783,7 +4789,7 @@ namespace Hack.io.BMD
                         return obj is IndirectTexturing texturing &&
                                HasLookup == texturing.HasLookup &&
                                IndTexStageNum == texturing.IndTexStageNum &&
-                               EqualityComparer<IndirectTevOrder[]>.Default.Equals(TevOrders, texturing.TevOrders) &&
+                               EqualityComparer<IndirectTevOrder?[]>.Default.Equals(TevOrders, texturing.TevOrders) &&
                                EqualityComparer<IndirectTexMatrix[]>.Default.Equals(Matrices, texturing.Matrices) &&
                                EqualityComparer<IndirectTexScale[]>.Default.Equals(Scales, texturing.Scales) &&
                                EqualityComparer<IndirectTevStage[]>.Default.Equals(TevStages, texturing.TevStages);
@@ -4794,7 +4800,7 @@ namespace Hack.io.BMD
                         var hashCode = -407782791;
                         hashCode = hashCode * -1521134295 + HasLookup.GetHashCode();
                         hashCode = hashCode * -1521134295 + IndTexStageNum.GetHashCode();
-                        hashCode = hashCode * -1521134295 + EqualityComparer<IndirectTevOrder[]>.Default.GetHashCode(TevOrders);
+                        hashCode = hashCode * -1521134295 + EqualityComparer<IndirectTevOrder?[]>.Default.GetHashCode(TevOrders);
                         hashCode = hashCode * -1521134295 + EqualityComparer<IndirectTexMatrix[]>.Default.GetHashCode(Matrices);
                         hashCode = hashCode * -1521134295 + EqualityComparer<IndirectTexScale[]>.Default.GetHashCode(Scales);
                         hashCode = hashCode * -1521134295 + EqualityComparer<IndirectTevStage[]>.Default.GetHashCode(TevStages);
@@ -4816,14 +4822,13 @@ namespace Hack.io.BMD
                         {
                             TexCoord = (TexCoordId)reader.ReadByte();
                             TexMap = (TexMapId)reader.ReadByte();
-                            reader.Position += 0x02;
                         }
 
                         public void Write(Stream writer)
                         {
                             writer.WriteByte((byte)TexCoord);
                             writer.WriteByte((byte)TexMap);
-                            writer.Write(new byte[2] { 0xFF, 0xFF }, 0, 2);
+                            writer.Write(new byte[2] { 0xFF, 0xFF }, 0, 2); //TODO: remove?
                         }
 
                         public override bool Equals(object obj)
@@ -4977,9 +4982,9 @@ namespace Hack.io.BMD
                     }
                     public struct IndirectTevStage
                     {
-                        public TevStageId TevStage;
+                        public TevStageId TevStageID;
                         public IndirectFormat IndTexFormat;
-                        public IndirectBias IndTexBiasSel;
+                        public IndirectBias IndTexBias;
                         public IndirectMatrix IndTexMtxId;
                         public IndirectWrap IndTexWrapS;
                         public IndirectWrap IndTexWrapT;
@@ -4989,9 +4994,9 @@ namespace Hack.io.BMD
 
                         public IndirectTevStage(TevStageId stageId, IndirectFormat format, IndirectBias bias, IndirectMatrix matrixId, IndirectWrap wrapS, IndirectWrap wrapT, bool addPrev, bool utcLod, IndirectAlpha alphaSel)
                         {
-                            TevStage = stageId;
+                            TevStageID = stageId;
                             IndTexFormat = format;
-                            IndTexBiasSel = bias;
+                            IndTexBias = bias;
                             IndTexMtxId = matrixId;
                             IndTexWrapS = wrapS;
                             IndTexWrapT = wrapT;
@@ -5002,9 +5007,9 @@ namespace Hack.io.BMD
 
                         public IndirectTevStage(Stream reader)
                         {
-                            TevStage = (TevStageId)reader.ReadByte();
+                            TevStageID = (TevStageId)reader.ReadByte();
                             IndTexFormat = (IndirectFormat)reader.ReadByte();
-                            IndTexBiasSel = (IndirectBias)reader.ReadByte();
+                            IndTexBias = (IndirectBias)reader.ReadByte();
                             IndTexMtxId = (IndirectMatrix)reader.ReadByte();
                             IndTexWrapS = (IndirectWrap)reader.ReadByte();
                             IndTexWrapT = (IndirectWrap)reader.ReadByte();
@@ -5016,9 +5021,9 @@ namespace Hack.io.BMD
 
                         public void Write(Stream writer)
                         {
-                            writer.WriteByte((byte)TevStage);
+                            writer.WriteByte((byte)TevStageID);
                             writer.WriteByte((byte)IndTexFormat);
-                            writer.WriteByte((byte)IndTexBiasSel);
+                            writer.WriteByte((byte)IndTexBias);
                             writer.WriteByte((byte)IndTexMtxId);
                             writer.WriteByte((byte)IndTexWrapS);
                             writer.WriteByte((byte)IndTexWrapT);
@@ -5034,9 +5039,9 @@ namespace Hack.io.BMD
                             if (!(obj is IndirectTevStage stage))
                                 return false;
                             
-                            return TevStage == stage.TevStage &&
+                            return TevStageID == stage.TevStageID &&
                                    IndTexFormat == stage.IndTexFormat &&
-                                   IndTexBiasSel == stage.IndTexBiasSel &&
+                                   IndTexBias == stage.IndTexBias &&
                                    IndTexMtxId == stage.IndTexMtxId &&
                                    IndTexWrapS == stage.IndTexWrapS &&
                                    IndTexWrapT == stage.IndTexWrapT &&
@@ -5048,9 +5053,9 @@ namespace Hack.io.BMD
                         public override int GetHashCode()
                         {
                             var hashCode = -1309543118;
-                            hashCode = hashCode * -1521134295 + TevStage.GetHashCode();
+                            hashCode = hashCode * -1521134295 + TevStageID.GetHashCode();
                             hashCode = hashCode * -1521134295 + IndTexFormat.GetHashCode();
-                            hashCode = hashCode * -1521134295 + IndTexBiasSel.GetHashCode();
+                            hashCode = hashCode * -1521134295 + IndTexBias.GetHashCode();
                             hashCode = hashCode * -1521134295 + IndTexMtxId.GetHashCode();
                             hashCode = hashCode * -1521134295 + IndTexWrapS.GetHashCode();
                             hashCode = hashCode * -1521134295 + IndTexWrapT.GetHashCode();
@@ -6407,12 +6412,13 @@ namespace Hack.io.BMD
             {
                 KCSel_1 = 0x00,     // Constant 1.0
                 KCSel_7_8 = 0x01,   // Constant 7/8
-                KCSel_3_4 = 0x02,   // Constant 3/4
+                KCSel_6_8 = 0x02,   // Constant 3/4
                 KCSel_5_8 = 0x03,   // Constant 5/8
-                KCSel_1_2 = 0x04,   // Constant 1/2
+                KCSel_4_8 = 0x04,   // Constant 1/2
                 KCSel_3_8 = 0x05,   // Constant 3/8
-                KCSel_1_4 = 0x06,   // Constant 1/4
+                KCSel_2_8 = 0x06,   // Constant 1/4
                 KCSel_1_8 = 0x07,   // Constant 1/8
+
                 KCSel_K0 = 0x0C,    // K0[RGB] Register
                 KCSel_K1 = 0x0D,    // K1[RGB] Register
                 KCSel_K2 = 0x0E,    // K2[RGB] Register
@@ -6438,11 +6444,11 @@ namespace Hack.io.BMD
             {
                 KASel_1 = 0x00,     // Constant 1.0
                 KASel_7_8 = 0x01,   // Constant 7/8
-                KASel_3_4 = 0x02,   // Constant 3/4
+                KASel_6_8 = 0x02,   // Constant 3/4
                 KASel_5_8 = 0x03,   // Constant 5/8
-                KASel_1_2 = 0x04,   // Constant 1/2
+                KASel_4_8 = 0x04,   // Constant 1/2
                 KASel_3_8 = 0x05,   // Constant 3/8
-                KASel_1_4 = 0x06,   // Constant 1/4
+                KASel_2_8 = 0x06,   // Constant 1/4
                 KASel_1_8 = 0x07,   // Constant 1/8
                 KASel_K0_R = 0x10,  // K0[R] Register
                 KASel_K1_R = 0x11,  // K1[R] Register
@@ -6460,15 +6466,6 @@ namespace Hack.io.BMD
                 KASel_K1_A = 0x1D,  // K1[A] Register
                 KASel_K2_A = 0x1E,  // K2[A] Register
                 KASel_K3_A = 0x1F   // K3[A] Register
-            }
-            public enum J3DColorChannelId
-            {
-                Color0 = 0,
-                Alpha0 = 1,
-                Color1 = 2,
-                Alpha1 = 3,
-
-                Null = 255
             }
 
             public enum Mat3OffsetIndex
