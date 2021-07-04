@@ -1706,7 +1706,9 @@ namespace Hack.io.BMD
                 public Bone Parent { get; internal set; }
                 public List<Bone> Children { get; private set; }
                 public Matrix4 InverseBindMatrix { get; private set; }
-                public Matrix4 TransformationMatrix { get; private set; }
+                public Matrix4 TransformationMatrix => Matrix4.CreateScale(m_Scale) *
+                                           Matrix4.CreateFromQuaternion(m_Rotation) *
+                                           Matrix4.CreateTranslation(m_Translation);
                 public SHP1.BoundingVolume Bounds { get; private set; }
 
                 private short m_MatrixType;
@@ -1752,10 +1754,6 @@ namespace Hack.io.BMD
                     BMD.Position += 0x02;
 
                     m_Translation = new Vector3(BitConverter.ToSingle(BMD.ReadReverse(0, 4), 0), BitConverter.ToSingle(BMD.ReadReverse(0, 4), 0), BitConverter.ToSingle(BMD.ReadReverse(0, 4), 0));
-
-                    TransformationMatrix = Matrix4.CreateScale(m_Scale) *
-                                           Matrix4.CreateFromQuaternion(m_Rotation) *
-                                           Matrix4.CreateTranslation(m_Translation);
 
                     Bounds = new SHP1.BoundingVolume(BMD);
                 }
