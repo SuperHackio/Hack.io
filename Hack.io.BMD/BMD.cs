@@ -1358,7 +1358,7 @@ namespace Hack.io.BMD
                 BMD.Position = ChunkStart + ChunkSize;
             }
 
-            public void SetInverseBindMatrices(List<Bone> flatSkel)
+            public void SetInverseBindMatrices(List<JNT1.Bone> flatSkel)
             {
                 if (InverseBindMatrices.Count == 0)
                 {
@@ -1486,6 +1486,219 @@ namespace Hack.io.BMD
                     BoneIndices.Add(boneIndex);
                 }
             }
+        }
+        public class DRW1
+        {
+            public List<bool> WeightTypeCheck { get; private set; } = new List<bool>();
+            public List<int> Indices { get; private set; } = new List<int>();
+
+            private static readonly string Magic = "DRW1";
+
+            public DRW1(Stream BMD)
+            {
+                int ChunkStart = (int)BMD.Position;
+                if (!BMD.ReadString(4).Equals(Magic))
+                    throw new Exception($"Invalid Identifier. Expected \"{Magic}\"");
+
+                int ChunkSize = BitConverter.ToInt32(BMD.ReadReverse(0, 4), 0);
+                int entryCount = BitConverter.ToInt16(BMD.ReadReverse(0, 2), 0);
+                BMD.Position += 0x2;
+
+                int boolDataOffset = BitConverter.ToInt32(BMD.ReadReverse(0, 4), 0);
+                int indexDataOffset = BitConverter.ToInt32(BMD.ReadReverse(0, 4), 0);
+
+                WeightTypeCheck = new List<bool>();
+
+                BMD.Seek(ChunkStart + boolDataOffset, System.IO.SeekOrigin.Begin);
+                for (int i = 0; i < entryCount; i++)
+                    WeightTypeCheck.Add(BMD.ReadByte() > 0);
+
+                BMD.Seek(ChunkStart + indexDataOffset, System.IO.SeekOrigin.Begin);
+                for (int i = 0; i < entryCount; i++)
+                    Indices.Add(BitConverter.ToInt16(BMD.ReadReverse(0, 2), 0));
+
+                BMD.Position = ChunkStart + ChunkSize;
+            }
+
+            public void Write(Stream writer)
+            {
+                long start = writer.Position;
+
+                writer.WriteString("DRW1");
+                writer.Write(new byte[4] { 0xDD, 0xDD, 0xDD, 0xDD }, 0, 4); // Placeholder for section size
+                writer.WriteReverse(BitConverter.GetBytes((short)WeightTypeCheck.Count), 0, 2);
+                writer.Write(new byte[2] { 0xFF, 0xFF }, 0, 2);
+
+                writer.Write(new byte[4] { 0x00, 0x00, 0x00, 0x14 }, 0, 4); // Offset to weight type bools, always 20
+                long IndiciesOffset = writer.Position;
+                writer.WriteReverse(BitConverter.GetBytes(20 + WeightTypeCheck.Count), 0, 4); // Offset to indices, always 20 + number of weight type bools
+
+                foreach (bool bol in WeightTypeCheck)
+                    writer.WriteByte((byte)(bol ? 0x01 : 0x00));
+
+                AddPadding(writer, 2);
+
+                uint IndOffs = (uint)(writer.Position - start);
+                foreach (int inte in Indices)
+                    writer.WriteReverse(BitConverter.GetBytes((short)inte), 0, 2);
+
+                AddPadding(writer, 32);
+
+                long end = writer.Position;
+                long length = end - start;
+
+                writer.Position = start + 4;
+                writer.WriteReverse(BitConverter.GetBytes((int)length), 0, 4);
+                writer.Position = start + 0x10;
+                writer.WriteReverse(BitConverter.GetBytes(IndOffs), 0, 4); // Offset to indices, always 20 + number of weight type bools
+                writer.Position = end;
+            }
+        }
+        public class JNT1
+        {
+            public List<JNT1.Bone> FlatSkeleton { get; private set; } = new List<JNT1.Bone>();
+            public Dictionary<string, int> BoneNameIndices { get; private set; } = new Dictionary<string, int>();
+
+            private static readonly string Magic = "JNT1";
+
+            public JNT1(Stream BMD)
+            {
+                int ChunkStart = (int)BMD.Position;
+                if (!BMD.ReadString(4).Equals(Magic))
+                    throw new Exception($"Invalid Identifier. Expected \"{Magic}\"");
+
+                int jnt1Size = BitConverter.ToInt32(BMD.ReadReverse(0, 4), 0);
+                int jointCount = BitConverter.ToInt16(BMD.ReadReverse(0, 2), 0);
+                BMD.Position += 0x02;
+                
+                int jointDataOffset = BitConverter.ToInt32(BMD.ReadReverse(0, 4), 0);
+                int internTableOffset = BitConverter.ToInt32(BMD.ReadReverse(0, 4), 0);
+                int nameTableOffset = BitConverter.ToInt32(BMD.ReadReverse(0, 4), 0);
+
+                List<string> names = new List<string>();
+
+                BMD.Seek(ChunkStart + nameTableOffset, SeekOrigin.Begin);
+
+                short stringCount = BitConverter.ToInt16(BMD.ReadReverse(0, 2), 0);
+                BMD.Position += 0x02;
+
+                for (int i = 0; i < stringCount; i++)
+                {
+                    BMD.Position += 0x02;
+                    short nameOffset = BitConverter.ToInt16(BMD.ReadReverse(0, 2), 0);
+                    long saveReaderPos = BMD.Position;
+                    BMD.Position = ChunkStart + nameTableOffset + nameOffset;
+
+                    names.Add(BMD.ReadString());
+
+                    BMD.Position = saveReaderPos;
+                }
+
+                int highestRemap = 0;
+                List<int> remapTable = new List<int>();
+                BMD.Seek(ChunkStart + internTableOffset, SeekOrigin.Begin);
+                for (int i = 0; i < jointCount; i++)
+                {
+                    int test = BitConverter.ToInt16(BMD.ReadReverse(0, 2), 0);
+                    remapTable.Add(test);
+
+                    if (test > highestRemap)
+                        highestRemap = test;
+                }
+
+                List<JNT1.Bone> tempList = new List<JNT1.Bone>();
+                BMD.Seek(ChunkStart + jointDataOffset, SeekOrigin.Begin);
+                for (int i = 0; i <= highestRemap; i++)
+                {
+                    tempList.Add(new JNT1.Bone(BMD, names[i]));
+                }
+
+                for (int i = 0; i < jointCount; i++)
+                {
+                    FlatSkeleton.Add(tempList[remapTable[i]]);
+                }
+
+                foreach (JNT1.Bone bone in FlatSkeleton)
+                    BoneNameIndices.Add(bone.Name, FlatSkeleton.IndexOf(bone));
+
+                BMD.Position = ChunkStart + jnt1Size;
+            }
+
+            public void Write(Stream writer)
+            {
+                long start = writer.Position;
+
+                writer.WriteString("JNT1");
+                writer.Write(new byte[4] { 0xDD, 0xDD, 0xDD, 0xDD }, 0, 4); // Placeholder for section size
+                writer.WriteReverse(BitConverter.GetBytes((short)FlatSkeleton.Count), 0, 2);
+                writer.Write(new byte[2] { 0xFF, 0xFF }, 0, 2);
+
+                writer.Write(new byte[4] { 0x00, 0x00, 0x00, 0x18 }, 0, 4); // Offset to joint data, always 24
+                writer.Write(new byte[4] { 0xDD, 0xDD, 0xDD, 0xDD }, 0, 4); // Placeholder for remap data offset
+                writer.Write(new byte[4] { 0xDD, 0xDD, 0xDD, 0xDD }, 0, 4); // Placeholder for name table offset
+
+                List<string> names = new List<string>();
+                foreach (JNT1.Bone bone in FlatSkeleton)
+                {
+                    byte[] BoneData = bone.ToBytes();
+                    writer.Write(BoneData, 0, BoneData.Length);
+                    names.Add(bone.Name);
+                }
+
+                long curOffset = writer.Position;
+
+                writer.Seek((int)(start + 16), SeekOrigin.Begin);
+                writer.WriteReverse(BitConverter.GetBytes((int)(curOffset - start)), 0, 4);
+                writer.Seek((int)curOffset, SeekOrigin.Begin);
+
+                for (int i = 0; i < FlatSkeleton.Count; i++)
+                    writer.WriteReverse(BitConverter.GetBytes((short)i), 0, 2);
+
+                AddPadding(writer, 4);
+
+                curOffset = writer.Position;
+
+                writer.Seek((int)(start + 20), SeekOrigin.Begin);
+                writer.WriteReverse(BitConverter.GetBytes((int)(curOffset - start)), 0, 4);
+                writer.Seek((int)curOffset, SeekOrigin.Begin);
+
+                writer.WriteStringTable(names);
+
+                AddPadding(writer, 32);
+
+                long end = writer.Position;
+                long length = end - start;
+
+                writer.Seek((int)start + 4, SeekOrigin.Begin);
+                writer.WriteReverse(BitConverter.GetBytes((int)length), 0, 4);
+                writer.Seek((int)end, SeekOrigin.Begin);
+            }
+
+            public void InitBoneFamilies(INF1 Scenegraph)
+            {
+                List<JNT1.Bone> processedJoints = new List<JNT1.Bone>();
+                IterateHierarchyForSkeletonRecursive(Scenegraph.Root, processedJoints, -1);
+            }
+            private void IterateHierarchyForSkeletonRecursive(INF1.Node curNode, List<JNT1.Bone> processedJoints, int parentIndex)
+            {
+                switch (curNode.Type)
+                {
+                    case INF1.NodeType.Joint:
+                        JNT1.Bone joint = FlatSkeleton[curNode.Index];
+
+                        if (parentIndex >= 0)
+                        {
+                            joint.Parent = processedJoints[parentIndex];
+                        }
+                        processedJoints.Add(joint);
+                        break;
+                }
+
+                parentIndex = processedJoints.Count - 1;
+                foreach (var child in curNode.Children)
+                    IterateHierarchyForSkeletonRecursive(child, processedJoints, parentIndex);
+            }
+
 
             public class Bone
             {
@@ -1624,218 +1837,6 @@ namespace Hack.io.BMD
 
                     return outList.ToArray();
                 }
-            }
-        }
-        public class DRW1
-        {
-            public List<bool> WeightTypeCheck { get; private set; } = new List<bool>();
-            public List<int> Indices { get; private set; } = new List<int>();
-
-            private static readonly string Magic = "DRW1";
-
-            public DRW1(Stream BMD)
-            {
-                int ChunkStart = (int)BMD.Position;
-                if (!BMD.ReadString(4).Equals(Magic))
-                    throw new Exception($"Invalid Identifier. Expected \"{Magic}\"");
-
-                int ChunkSize = BitConverter.ToInt32(BMD.ReadReverse(0, 4), 0);
-                int entryCount = BitConverter.ToInt16(BMD.ReadReverse(0, 2), 0);
-                BMD.Position += 0x2;
-
-                int boolDataOffset = BitConverter.ToInt32(BMD.ReadReverse(0, 4), 0);
-                int indexDataOffset = BitConverter.ToInt32(BMD.ReadReverse(0, 4), 0);
-
-                WeightTypeCheck = new List<bool>();
-
-                BMD.Seek(ChunkStart + boolDataOffset, System.IO.SeekOrigin.Begin);
-                for (int i = 0; i < entryCount; i++)
-                    WeightTypeCheck.Add(BMD.ReadByte() > 0);
-
-                BMD.Seek(ChunkStart + indexDataOffset, System.IO.SeekOrigin.Begin);
-                for (int i = 0; i < entryCount; i++)
-                    Indices.Add(BitConverter.ToInt16(BMD.ReadReverse(0, 2), 0));
-
-                BMD.Position = ChunkStart + ChunkSize;
-            }
-
-            public void Write(Stream writer)
-            {
-                long start = writer.Position;
-
-                writer.WriteString("DRW1");
-                writer.Write(new byte[4] { 0xDD, 0xDD, 0xDD, 0xDD }, 0, 4); // Placeholder for section size
-                writer.WriteReverse(BitConverter.GetBytes((short)WeightTypeCheck.Count), 0, 2);
-                writer.Write(new byte[2] { 0xFF, 0xFF }, 0, 2);
-
-                writer.Write(new byte[4] { 0x00, 0x00, 0x00, 0x14 }, 0, 4); // Offset to weight type bools, always 20
-                long IndiciesOffset = writer.Position;
-                writer.WriteReverse(BitConverter.GetBytes(20 + WeightTypeCheck.Count), 0, 4); // Offset to indices, always 20 + number of weight type bools
-
-                foreach (bool bol in WeightTypeCheck)
-                    writer.WriteByte((byte)(bol ? 0x01 : 0x00));
-
-                AddPadding(writer, 2);
-
-                uint IndOffs = (uint)(writer.Position - start);
-                foreach (int inte in Indices)
-                    writer.WriteReverse(BitConverter.GetBytes((short)inte), 0, 2);
-
-                AddPadding(writer, 32);
-
-                long end = writer.Position;
-                long length = end - start;
-
-                writer.Position = start + 4;
-                writer.WriteReverse(BitConverter.GetBytes((int)length), 0, 4);
-                writer.Position = start + 0x10;
-                writer.WriteReverse(BitConverter.GetBytes(IndOffs), 0, 4); // Offset to indices, always 20 + number of weight type bools
-                writer.Position = end;
-            }
-        }
-        public class JNT1
-        {
-            public List<EVP1.Bone> FlatSkeleton { get; private set; } = new List<EVP1.Bone>();
-            public Dictionary<string, int> BoneNameIndices { get; private set; } = new Dictionary<string, int>();
-
-            private static readonly string Magic = "JNT1";
-
-            public JNT1(Stream BMD)
-            {
-                int ChunkStart = (int)BMD.Position;
-                if (!BMD.ReadString(4).Equals(Magic))
-                    throw new Exception($"Invalid Identifier. Expected \"{Magic}\"");
-
-                int jnt1Size = BitConverter.ToInt32(BMD.ReadReverse(0, 4), 0);
-                int jointCount = BitConverter.ToInt16(BMD.ReadReverse(0, 2), 0);
-                BMD.Position += 0x02;
-                
-                int jointDataOffset = BitConverter.ToInt32(BMD.ReadReverse(0, 4), 0);
-                int internTableOffset = BitConverter.ToInt32(BMD.ReadReverse(0, 4), 0);
-                int nameTableOffset = BitConverter.ToInt32(BMD.ReadReverse(0, 4), 0);
-
-                List<string> names = new List<string>();
-
-                BMD.Seek(ChunkStart + nameTableOffset, SeekOrigin.Begin);
-
-                short stringCount = BitConverter.ToInt16(BMD.ReadReverse(0, 2), 0);
-                BMD.Position += 0x02;
-
-                for (int i = 0; i < stringCount; i++)
-                {
-                    BMD.Position += 0x02;
-                    short nameOffset = BitConverter.ToInt16(BMD.ReadReverse(0, 2), 0);
-                    long saveReaderPos = BMD.Position;
-                    BMD.Position = ChunkStart + nameTableOffset + nameOffset;
-
-                    names.Add(BMD.ReadString());
-
-                    BMD.Position = saveReaderPos;
-                }
-
-                int highestRemap = 0;
-                List<int> remapTable = new List<int>();
-                BMD.Seek(ChunkStart + internTableOffset, SeekOrigin.Begin);
-                for (int i = 0; i < jointCount; i++)
-                {
-                    int test = BitConverter.ToInt16(BMD.ReadReverse(0, 2), 0);
-                    remapTable.Add(test);
-
-                    if (test > highestRemap)
-                        highestRemap = test;
-                }
-
-                List<EVP1.Bone> tempList = new List<EVP1.Bone>();
-                BMD.Seek(ChunkStart + jointDataOffset, SeekOrigin.Begin);
-                for (int i = 0; i <= highestRemap; i++)
-                {
-                    tempList.Add(new EVP1.Bone(BMD, names[i]));
-                }
-
-                for (int i = 0; i < jointCount; i++)
-                {
-                    FlatSkeleton.Add(tempList[remapTable[i]]);
-                }
-
-                foreach (EVP1.Bone bone in FlatSkeleton)
-                    BoneNameIndices.Add(bone.Name, FlatSkeleton.IndexOf(bone));
-
-                BMD.Position = ChunkStart + jnt1Size;
-            }
-
-            public void Write(Stream writer)
-            {
-                long start = writer.Position;
-
-                writer.WriteString("JNT1");
-                writer.Write(new byte[4] { 0xDD, 0xDD, 0xDD, 0xDD }, 0, 4); // Placeholder for section size
-                writer.WriteReverse(BitConverter.GetBytes((short)FlatSkeleton.Count), 0, 2);
-                writer.Write(new byte[2] { 0xFF, 0xFF }, 0, 2);
-
-                writer.Write(new byte[4] { 0x00, 0x00, 0x00, 0x18 }, 0, 4); // Offset to joint data, always 24
-                writer.Write(new byte[4] { 0xDD, 0xDD, 0xDD, 0xDD }, 0, 4); // Placeholder for remap data offset
-                writer.Write(new byte[4] { 0xDD, 0xDD, 0xDD, 0xDD }, 0, 4); // Placeholder for name table offset
-
-                List<string> names = new List<string>();
-                foreach (EVP1.Bone bone in FlatSkeleton)
-                {
-                    byte[] BoneData = bone.ToBytes();
-                    writer.Write(BoneData, 0, BoneData.Length);
-                    names.Add(bone.Name);
-                }
-
-                long curOffset = writer.Position;
-
-                writer.Seek((int)(start + 16), SeekOrigin.Begin);
-                writer.WriteReverse(BitConverter.GetBytes((int)(curOffset - start)), 0, 4);
-                writer.Seek((int)curOffset, SeekOrigin.Begin);
-
-                for (int i = 0; i < FlatSkeleton.Count; i++)
-                    writer.WriteReverse(BitConverter.GetBytes((short)i), 0, 2);
-
-                AddPadding(writer, 4);
-
-                curOffset = writer.Position;
-
-                writer.Seek((int)(start + 20), SeekOrigin.Begin);
-                writer.WriteReverse(BitConverter.GetBytes((int)(curOffset - start)), 0, 4);
-                writer.Seek((int)curOffset, SeekOrigin.Begin);
-
-                writer.WriteStringTable(names);
-
-                AddPadding(writer, 32);
-
-                long end = writer.Position;
-                long length = end - start;
-
-                writer.Seek((int)start + 4, SeekOrigin.Begin);
-                writer.WriteReverse(BitConverter.GetBytes((int)length), 0, 4);
-                writer.Seek((int)end, SeekOrigin.Begin);
-            }
-
-            public void InitBoneFamilies(INF1 Scenegraph)
-            {
-                List<EVP1.Bone> processedJoints = new List<EVP1.Bone>();
-                IterateHierarchyForSkeletonRecursive(Scenegraph.Root, processedJoints, -1);
-            }
-            private void IterateHierarchyForSkeletonRecursive(INF1.Node curNode, List<EVP1.Bone> processedJoints, int parentIndex)
-            {
-                switch (curNode.Type)
-                {
-                    case INF1.NodeType.Joint:
-                        EVP1.Bone joint = FlatSkeleton[curNode.Index];
-
-                        if (parentIndex >= 0)
-                        {
-                            joint.Parent = processedJoints[parentIndex];
-                        }
-                        processedJoints.Add(joint);
-                        break;
-                }
-
-                parentIndex = processedJoints.Count - 1;
-                foreach (var child in curNode.Children)
-                    IterateHierarchyForSkeletonRecursive(child, processedJoints, parentIndex);
             }
         }
         public class SHP1
