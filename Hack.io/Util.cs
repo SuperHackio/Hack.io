@@ -391,21 +391,40 @@ namespace Hack.io.Util
                 Values[Values.Length - 1] = temp;
             }
         }
+
         /// <summary>
-        /// Math.Clamp doesn't exist for whatever reason
+        /// Compares the contents of two dictionaries
         /// </summary>
-        /// <param name="value">The value to clamp</param>
-        /// <param name="min">The Minimum value</param>
-        /// <param name="max">The Maximum value</param>
+        /// <typeparam name="TKey"></typeparam>
+        /// <typeparam name="TValue"></typeparam>
+        /// <param name="left"></param>
+        /// <param name="right"></param>
         /// <returns></returns>
-        public static T Clamp<T>(T value, T max, T min) where T : IComparable<T>
+        public static bool Equals<TKey, TValue>(Dictionary<TKey, TValue> left, Dictionary<TKey, TValue> right)
         {
-            T result = value;
-            if (value.CompareTo(max) > 0)
-                result = max;
-            if (value.CompareTo(min) < 0)
-                result = min;
-            return result;
+            if (left.Count != right.Count)
+                return false;
+
+            bool IsEqual = true;
+            foreach (KeyValuePair<TKey, TValue> pair in left)
+            {
+                if (right.TryGetValue(pair.Key, out TValue value))
+                {
+                    // Require value be equal.
+                    if (!value.Equals(pair.Value))
+                    {
+                        IsEqual = false;
+                        break;
+                    }
+                }
+                else
+                {
+                    // Require key be present.
+                    IsEqual = false;
+                    break;
+                }
+            }
+            return IsEqual;
         }
     }
 }
