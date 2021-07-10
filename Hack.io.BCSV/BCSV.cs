@@ -19,31 +19,6 @@ namespace Hack.io.BCSV
         public string FileName { get; set; } = null;
 
         /// <summary>
-        /// Create a new BCSV
-        /// </summary>
-        public BCSV()
-        {
-            Fields = new Dictionary<uint, BCSVField>();
-            Entries = new List<BCSVEntry>();
-        }
-        /// <summary>
-        /// Open a BCSV File
-        /// </summary>
-        /// <param name="Filename">filepath</param>
-        public BCSV(string Filename)
-        {
-            FileStream fs = new FileStream(Filename, FileMode.Open);
-            Read(fs);
-            fs.Close();
-            FileName = Filename;
-        }
-        /// <summary>
-        /// Read a BCSV from a stream. The stream position must be at the start of the BCSV File
-        /// </summary>
-        /// <param name="BCSV">The stream to read from</param>
-        public BCSV(Stream BCSV) => Read(BCSV);
-
-        /// <summary>
         /// Gets or sets the BCSVEntry at the specified index.
         /// </summary>
         /// <param name="index"></param>
@@ -82,6 +57,31 @@ namespace Hack.io.BCSV
         public int EntryCount => Entries == null ? -1 : Entries.Count;
 
         /// <summary>
+        /// Create a new BCSV
+        /// </summary>
+        public BCSV()
+        {
+            Fields = new Dictionary<uint, BCSVField>();
+            Entries = new List<BCSVEntry>();
+        }
+        /// <summary>
+        /// Open a BCSV File
+        /// </summary>
+        /// <param name="Filename">filepath</param>
+        public BCSV(string Filename)
+        {
+            FileStream fs = new FileStream(Filename, FileMode.Open);
+            Read(fs);
+            fs.Close();
+            FileName = Filename;
+        }
+        /// <summary>
+        /// Read a BCSV from a stream. The stream position must be at the start of the BCSV File
+        /// </summary>
+        /// <param name="BCSV">The stream to read from</param>
+        public BCSV(Stream BCSV) => Read(BCSV);
+
+        /// <summary>
         /// Save the BCSV to a file
         /// </summary>
         /// <param name="Filename"></param>
@@ -102,11 +102,13 @@ namespace Hack.io.BCSV
 
             ushort offset = 0;
             List<KeyValuePair<uint, BCSVField>> FieldList = Fields.ToList();
-            for (int i = 0; i < FieldList.Count; i++)
+            List<KeyValuePair<uint, BCSVField>> OrganizedFieldList = GenerateSortedFields(FieldList);
+            for (int i = 0; i < OrganizedFieldList.Count; i++)
             {
-                BCSVField currentfield = FieldList[i].Value;
+                BCSVField currentfield = OrganizedFieldList[i].Value;
                 if (currentfield.AutoRecalc)
                 {
+                    currentfield.AutoRecalc = false;
                     currentfield.Bitmask = currentfield.DataType == DataTypes.BYTE ? 0x000000FF : (currentfield.DataType == DataTypes.INT16 ? 0x0000FFFF : 0xFFFFFFFF);
                     currentfield.ShiftAmount = 0;
                 }
@@ -417,8 +419,7 @@ namespace Hack.io.BCSV
         //            return i + 4;
         //    return 0;
         //}
-
-
+        
         internal void Read(Stream BCSV)
         {
             Fields = new Dictionary<uint, BCSVField>();
@@ -451,7 +452,53 @@ namespace Hack.io.BCSV
             }
             //Console.WriteLine("Complete!");
         }
+        
+        private List<KeyValuePair<uint, BCSVField>> GenerateSortedFields(List<KeyValuePair<uint, BCSVField>> original)
+        {
+            List<KeyValuePair<uint, BCSVField>> Float = new List<KeyValuePair<uint, BCSVField>>(),
+                Int32 = new List<KeyValuePair<uint, BCSVField>>(),
+                Int16 = new List<KeyValuePair<uint, BCSVField>>(),
+                Byte = new List<KeyValuePair<uint, BCSVField>>(),
+                String = new List<KeyValuePair<uint, BCSVField>>(),
+                Uint32 = new List<KeyValuePair<uint, BCSVField>>();
+            for (int i = 0; i < original.Count; i++)
+            {
+                switch (original[i].Value.DataType)
+                {
+                    case DataTypes.INT32:
+                        Int32.Add(original[i]);
+                        break;
+                    case DataTypes.FLOAT:
+                        Float.Add(original[i]);
+                        break;
+                    case DataTypes.UINT32:
+                        Uint32.Add(original[i]);
+                        break;
+                    case DataTypes.INT16:
+                        Int16.Add(original[i]);
+                        break;
+                    case DataTypes.BYTE:
+                        Byte.Add(original[i]);
+                        break;
+                    case DataTypes.STRING:
+                        String.Add(original[i]);
+                        break;
+                    case DataTypes.UNKNOWN:
+                    case DataTypes.NULL:
+                    default:
+                        throw new Exception();
+                }
+            }
 
+            List<KeyValuePair<uint, BCSVField>> result = new List<KeyValuePair<uint, BCSVField>>();
+            result.AddRange(Float);
+            result.AddRange(Int32);
+            result.AddRange(Uint32);
+            result.AddRange(String);
+            result.AddRange(Int16);
+            result.AddRange(Byte);
+            return result;
+        }
 
         //=====================================================================
 
@@ -480,32 +527,68 @@ namespace Hack.io.BCSV
         /// </summary>
         public uint HashName { get; set; }
         /// <summary>
+        /// The type of data being held inside this field
+        /// </summary>
+        public DataTypes DataType { get; set; }
+        /// <summary>
         /// The number that determines how the value is read from the file
         /// </summary>
-        public uint Bitmask { get; set; }
+        public uint Bitmask
+        {
+            get => _Bitmask;
+            set
+            {
+                if (AutoRecalc)
+                    throw new Exception("Can't set the Bitmask if AutoRecalc is enabled.");
+                _Bitmask = value;
+            }
+        }
+        private uint _Bitmask;
+        /// <summary>
+        /// The number of bits to shift while reading the value from the file
+        /// </summary>
+        public byte ShiftAmount
+        {
+            get => _ShiftAmount;
+            set
+            {
+                if (AutoRecalc)
+                    throw new Exception("Can't set the ShiftAmount if AutoRecalc is enabled.");
+                _ShiftAmount = value;
+            }
+        }
+        private byte _ShiftAmount;
         /// <summary>
         /// The offset within the binary entry that this field is located at. Automatically calculated while saving.
         /// </summary>
         public ushort EntryOffset { get; internal set; }
         /// <summary>
-        /// The number of bits to shift while reading the value from the file
-        /// </summary>
-        public byte ShiftAmount { get; set; }
-        /// <summary>
-        /// The type of data being held inside this field
-        /// </summary>
-        public DataTypes DataType { get; set; }
-        /// <summary>
         /// Setting this to true will auto-recalculate the Bitmask and Shift Amount on Save
         /// </summary>
         public bool AutoRecalc { get; set; }
+
         /// <summary>
         /// Create a new, empty BCSV Field
         /// </summary>
-        public BCSVField()
-        {
-
-        }
+        public BCSVField() { }
+        /// <summary>
+        /// Create a new BCSV field while also setting values
+        /// </summary>
+        /// <param name="hash">The field hash</param>
+        /// <param name="type">The data type</param>
+        /// <param name="bitmask"></param>
+        /// <param name="shift"></param>
+        /// <param name="Auto">Sets AutoRecalc to True. The bitmask and shift will be calculated automatically</param>
+        public BCSVField(uint hash, DataTypes type, uint bitmask = 0xFFFFFFFF, byte shift = 0, bool Auto = true) => Init(hash, type,bitmask, shift, Auto);
+        /// <summary>
+        /// Create a new BCSV field while also setting values. Set the field hash using a string instead of a hash
+        /// </summary>
+        /// <param name="fieldname"></param>
+        /// <param name="type">The data type</param>
+        /// <param name="bitmask"></param>
+        /// <param name="shift"></param>
+        /// <param name="Auto">Sets AutoRecalc to True. The bitmask and shift will be calculated automatically</param>
+        public BCSVField(string fieldname, DataTypes type, uint bitmask = 0xFFFFFFFF, byte shift = 0, bool Auto = true) => Init(BCSV.FieldNameToHash(fieldname), type,bitmask, shift, Auto);
 
         internal BCSVField(Stream BCSV)
         {
@@ -553,6 +636,63 @@ namespace Hack.io.BCSV
                 default:
                     return null;
             }
+        }
+
+        private void Init(uint hash, DataTypes type, uint bitmask, byte shift, bool Auto)
+        {
+            HashName = hash;
+            Bitmask = bitmask;
+            ShiftAmount = shift;
+            DataType = type;
+            AutoRecalc = Auto;
+        }
+
+        /// <summary>
+        /// Returns a string that represents the current object
+        /// </summary>
+        /// <returns></returns>
+        public override string ToString() => base.ToString();
+        /// <summary>
+        /// Compares this BCSVField to another BCSVField.<para/>NOTE: This check excludes AutoRecalc and the Automatically Calculated Entry Offset variable
+        /// </summary>
+        /// <param name="obj"></param>
+        /// <returns></returns>
+        public override bool Equals(object obj)
+        {
+            return obj is BCSVField field &&
+                   HashName == field.HashName &&
+                   DataType == field.DataType &&
+                   _Bitmask == field._Bitmask &&
+                   _ShiftAmount == field._ShiftAmount;
+        }
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="field1"></param>
+        /// <param name="field2"></param>
+        /// <returns></returns>
+        public static bool operator ==(BCSVField field1, BCSVField field2) => field1.Equals(field2);
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="field1"></param>
+        /// <param name="field2"></param>
+        /// <returns></returns>
+        public static bool operator !=(BCSVField field1, BCSVField field2) => !field1.Equals(field2);
+        /// <summary>
+        /// Auto Generated by Visual Studio
+        /// </summary>
+        /// <returns></returns>
+        public override int GetHashCode()
+        {
+            var hashCode = -2117134392;
+            hashCode = hashCode * -1521134295 + HashName.GetHashCode();
+            hashCode = hashCode * -1521134295 + DataType.GetHashCode();
+            hashCode = hashCode * -1521134295 + _Bitmask.GetHashCode();
+            hashCode = hashCode * -1521134295 + _ShiftAmount.GetHashCode();
+            hashCode = hashCode * -1521134295 + EntryOffset.GetHashCode();
+            hashCode = hashCode * -1521134295 + AutoRecalc.GetHashCode();
+            return hashCode;
         }
     }
     /// <summary>
@@ -761,7 +901,24 @@ namespace Hack.io.BCSV
                 clip += "|" + Data.ElementAt(i).Key.ToString("X8") + "%" + Data.ElementAt(i).Value.ToString() + "%" + Data.ElementAt(i).Value.GetType().ToString().Replace("System.", "");
             return clip;
         }
+        /// <summary>
+        /// Creates a clone of this BCSVEntry
+        /// </summary>
+        /// <returns></returns>
+        public BCSVEntry Clone() => Clone(this);
 
+        /// <summary>
+        /// Creates a clone of a BCSVEntry
+        /// </summary>
+        /// <param name="SourceEntry"></param>
+        /// <returns></returns>
+        public static BCSVEntry Clone(BCSVEntry SourceEntry)
+        {
+            string data = SourceEntry.ToClipboard();
+            BCSVEntry entry = new BCSVEntry();
+            entry.FromClipboard(data);
+            return entry;
+        }
         /// <summary>
         /// 
         /// </summary>
@@ -781,7 +938,7 @@ namespace Hack.io.BCSV
         /// </summary>
         /// <param name="obj">Object to compare to</param>
         /// <returns></returns>
-        public override bool Equals(object obj) => obj is BCSVEntry entry;
+        public override bool Equals(object obj) => obj is BCSVEntry entry && Hack.io.Util.GenericExtensions.Equals(Data, entry.Data);
 
         /// <summary>
         /// Auto-Generated
