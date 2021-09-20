@@ -320,7 +320,34 @@ namespace Hack.io.BMD
 
             }
         }
-
+        public static OpenTK.Graphics.OpenGL.PixelInternalFormat FromGXToOpenTK_InternalFormat(GXImageFormat imageformat)
+        {
+            switch (imageformat)
+            {
+                case GXImageFormat.I4:
+                case GXImageFormat.I8:
+                    return OpenTK.Graphics.OpenGL.PixelInternalFormat.Intensity;
+                case GXImageFormat.IA4:
+                case GXImageFormat.IA8:
+                    return OpenTK.Graphics.OpenGL.PixelInternalFormat.Luminance8Alpha8;
+                default:
+                    return OpenTK.Graphics.OpenGL.PixelInternalFormat.Four;
+            }
+        }
+        public static OpenTK.Graphics.OpenGL.PixelFormat FromGXToOpenTK_PixelFormat(GXImageFormat imageformat)
+        {
+            switch (imageformat)
+            {
+                case GXImageFormat.I4:
+                case GXImageFormat.I8:
+                    return OpenTK.Graphics.OpenGL.PixelFormat.Luminance;
+                case GXImageFormat.IA4:
+                case GXImageFormat.IA8:
+                    return OpenTK.Graphics.OpenGL.PixelFormat.LuminanceAlpha;
+                default:
+                    return OpenTK.Graphics.OpenGL.PixelFormat.Bgra;
+            }
+        }
 
         //=====================================================================
 
