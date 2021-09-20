@@ -10,6 +10,19 @@ namespace Hack.io.BTI
 {
     public class BTI : JUTTexture
     {
+        public GXImageFormat Format => base[0].Format;
+        public GXPaletteFormat PaletteFormat => base[0].PaletteFormat;
+        public GXWrapMode WrapS => base[0].WrapS;
+        public GXWrapMode WrapT => base[0].WrapT;
+        public GXFilterMode MagnificationFilter => base[0].MagnificationFilter;
+        public GXFilterMode MinificationFilter => base[0].MinificationFilter;
+        public float MinLOD => base[0].MinLOD;
+        public float MaxLOD => base[0].MaxLOD;
+        public float LODBias => base[0].LODBias;
+        public bool EnableEdgeLoD => base[0].EnableEdgeLoD;
+
+        public Size LargestSize => base[0].LargestSize;
+        public Size SmallestSize => base[0].SmallestSize;
         //private List<Bitmap> mipmaps = new List<Bitmap>();
         //public GXImageFormat Format { get; set; }
         //public GXPaletteFormat PaletteFormat { get; set; }
@@ -34,6 +47,13 @@ namespace Hack.io.BTI
             FileName = filename;
         }
         public BTI(Stream memorystream) => Read(memorystream);
+
+        public new Bitmap this[int index]
+        {
+            get => base[0][index];
+            set => base[0][index] = value;
+        }
+        public new int Count => base[0].Count;
 
         ///// <summary>
         ///// Creates a BTI from a bitmap[]
@@ -141,19 +161,19 @@ namespace Hack.io.BTI
         {
             List<byte> ImageData = new List<byte>();
             List<byte> PaletteData = new List<byte>();
-            GetImageAndPaletteData(ref ImageData, ref PaletteData, this[0], this[0].Format, this[0].PaletteFormat);
+            GetImageAndPaletteData(ref ImageData, ref PaletteData, base[0], Format, PaletteFormat);
             long HeaderStart = BTIFile.Position;
             int ImageDataStart = (int)((DataOffset + PaletteData.Count) - HeaderStart), PaletteDataStart = (int)(DataOffset - HeaderStart);
-            BTIFile.WriteByte((byte)this[0].Format);
+            BTIFile.WriteByte((byte)this.Format);
             BTIFile.WriteByte((byte)AlphaSetting);
-            BTIFile.WriteReverse(BitConverter.GetBytes((ushort)this[0][0].Width), 0, 2);
-            BTIFile.WriteReverse(BitConverter.GetBytes((ushort)this[0][0].Height), 0, 2);
-            BTIFile.WriteByte((byte)this[0].WrapS);
-            BTIFile.WriteByte((byte)this[0].WrapT);
-            if (this[0].Format.IsPaletteFormat())
+            BTIFile.WriteReverse(BitConverter.GetBytes((ushort)this[0].Width), 0, 2);
+            BTIFile.WriteReverse(BitConverter.GetBytes((ushort)this[0].Height), 0, 2);
+            BTIFile.WriteByte((byte)WrapS);
+            BTIFile.WriteByte((byte)WrapT);
+            if (Format.IsPaletteFormat())
             {
                 BTIFile.WriteByte(0x01);
-                BTIFile.WriteByte((byte)this[0].PaletteFormat);
+                BTIFile.WriteByte((byte)PaletteFormat);
                 BTIFile.WriteReverse(BitConverter.GetBytes((ushort)(PaletteData.Count/2)), 0, 2);
                 BTIFile.WriteReverse(BitConverter.GetBytes(PaletteDataStart), 0, 4);
             }
@@ -161,16 +181,16 @@ namespace Hack.io.BTI
                 BTIFile.Write(new byte[8], 0, 8);
 
             BTIFile.WriteByte((byte)(Count > 1 ? 0x01 : 0x00));
-            BTIFile.WriteByte((byte)(this[0].EnableEdgeLoD ? 0x01 : 0x00));
+            BTIFile.WriteByte((byte)(this.EnableEdgeLoD ? 0x01 : 0x00));
             BTIFile.WriteByte((byte)(ClampLODBias ? 0x01 : 0x00));
             BTIFile.WriteByte(MaxAnisotropy);
-            BTIFile.WriteByte((byte)this[0].MinificationFilter);
-            BTIFile.WriteByte((byte)this[0].MagnificationFilter);
-            BTIFile.WriteByte((byte)(this[0].MinLOD * 8));
-            BTIFile.WriteByte((byte)(this[0].MaxLOD * 8));
-            BTIFile.WriteByte((byte)this[0].Count);
+            BTIFile.WriteByte((byte)MinificationFilter);
+            BTIFile.WriteByte((byte)MagnificationFilter);
+            BTIFile.WriteByte((byte)(MinLOD * 8));
+            BTIFile.WriteByte((byte)(MaxLOD * 8));
+            BTIFile.WriteByte((byte)Count);
             BTIFile.WriteByte(0x00);
-            BTIFile.WriteReverse(BitConverter.GetBytes((short)(this[0].LODBias * 100)), 0, 2);
+            BTIFile.WriteReverse(BitConverter.GetBytes((short)(LODBias * 100)), 0, 2);
             BTIFile.WriteReverse(BitConverter.GetBytes(ImageDataStart), 0, 4);
 
             long Pauseposition = BTIFile.Position;
