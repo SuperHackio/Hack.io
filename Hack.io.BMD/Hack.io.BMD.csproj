@@ -45,8 +45,19 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="BDL.cs" />
+    <Compile Include="BDL.MDL3.cs" />
     <Compile Include="BMD.cs" />
+    <Compile Include="BMD.DRW1.cs" />
+    <Compile Include="BMD.EVP1.cs" />
+    <Compile Include="BMD.INF1.cs" />
+    <Compile Include="BMD.JNT1.cs" />
+    <Compile Include="BMD.MAT3.cs" />
+    <Compile Include="BMD.SHP1.cs" />
+    <Compile Include="BMD.TEX1.cs" />
+    <Compile Include="BMD.VTX1.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="ShaderGenerator.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Hack.io.BTI\Hack.io.BTI.csproj">
