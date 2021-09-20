@@ -198,6 +198,20 @@ namespace Hack.io.BCSV
         /// <param name="field">Field to add</param>
         public void Add(BCSVField field) => Fields.Add(field.HashName, field);
         /// <summary>
+        /// Add Multiple BCSVEntry objects at once to the Field Dictionary
+        /// </summary>
+        /// <param name="array">Array of fields to add</param>
+        public void Add(params BCSVEntry[] array) => Entries.AddRange(array);
+        /// <summary>
+        /// Add Multiple BCSVField objects at once to the Field Dictionary
+        /// </summary>
+        /// <param name="array">Array of fields to add</param>
+        public void Add(params BCSVField[] array)
+        {
+            for (int i = 0; i < array.Length; i++)
+                Fields.Add(array[i].HashName, array[i]);
+        }
+        /// <summary>
         /// Add multiple BCSVEntry objects at once to the Entry List
         /// </summary>
         /// <param name="list">List of entries to add</param>
