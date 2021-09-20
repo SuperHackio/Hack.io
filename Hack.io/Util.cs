@@ -142,6 +142,58 @@ namespace Hack.io.Util
 
             return FinalList;
         }
+        /// <summary>
+        /// Compares the contents of two lists to see if they match
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="left"></param>
+        /// <param name="right"></param>
+        /// <returns></returns>
+        public static bool Equals<T>(this List<T> left, List<T> right)
+        {
+            if (left.Count != right.Count)
+                return false;
+
+            for (int i = 0; i < left.Count; i++)
+                if (!left[i].Equals(right[i]))
+                    return false;
+            return true;
+        }
+        /// <summary>
+        /// Compares the contents of the two lists using a custom function
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="left"></param>
+        /// <param name="right"></param>
+        /// <param name="comparefunc"></param>
+        /// <returns></returns>
+        public static bool Equals<T>(List<T> left, List<T> right, Func<T, T, bool> comparefunc)
+        {
+            if (left.Count != right.Count)
+                return false;
+
+            for (int i = 0; i < left.Count; i++)
+                if (!comparefunc(left[i], right[i]))
+                    return false;
+            return true;
+        }
+        /// <summary>
+        /// Gets a hash code from a List
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="list"></param>
+        /// <param name="starting"></param>
+        /// <param name="additive"></param>
+        /// <returns></returns>
+        public static int GetHashCode<T>(List<T> list, int starting = 0, int additive = 1)
+        {
+            int hashcode = starting;
+            for (int i = 0; i < list.Count; i++)
+            {
+                hashcode = hashcode * additive + list[i].GetHashCode();
+            }
+            return hashcode;
+        }
     }
     /// <summary>
     /// Extra String functions
@@ -305,6 +357,15 @@ namespace Hack.io.Util
             else if (val.CompareTo(max) > 0) return max;
             else return val;
         }
+
+        /// <summary>
+        /// Gets the percent value of a given number. Usually used by Background Workers
+        /// </summary>
+        /// <param name="Current"></param>
+        /// <param name="Max"></param>
+        /// <param name="OutOf"></param>
+        /// <returns></returns>
+        public static float GetPercentOf(float Current, float Max, float OutOf = 100f) => Current / Max * OutOf;
     }
     /// <summary>
     /// 
@@ -425,6 +486,27 @@ namespace Hack.io.Util
                 }
             }
             return IsEqual;
+        }
+
+        /// <summary>
+        /// Multiplies both width and height by the same number
+        /// </summary>
+        /// <param name="size"></param>
+        /// <param name="scale"></param>
+        public static void Multiply(this Size size, int scale)
+        {
+            size.Width *= scale;
+            size.Height *= scale;
+        }
+        /// <summary>
+        /// Divides both width and height by the same number
+        /// </summary>
+        /// <param name="size"></param>
+        /// <param name="scale"></param>
+        public static void Divide(this Size size, int scale)
+        {
+            size.Width /= scale;
+            size.Height /= scale;
         }
     }
 }
