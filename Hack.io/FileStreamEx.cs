@@ -579,7 +579,7 @@ namespace Hack.io
             FS.WriteByte(Terminator);
         }
         /// <summary>
-        /// Writes a string. String won't be null terminated
+        /// Writes a string. String will be NULL terminated
         /// </summary>
         /// <param name="FS"></param>
         /// <param name="String">String to write to the file</param>
