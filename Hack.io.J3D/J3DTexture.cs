@@ -457,10 +457,11 @@ namespace Hack.io.J3D
         public static void EncodeImage(ref List<byte> ImageData, Bitmap Image, GXImageFormat Format, Dictionary<Color, int> ColourIndicies)
         {
             int block_x = 0, block_y = 0;
+            byte[] Pixels = Image.ToByteArray();
 
             while (block_y < Image.Height)
             {
-                byte[] block_data = EncodeBlock(Format, Image, ColourIndicies, block_x, block_y);
+                byte[] block_data = EncodeBlock(Format, Pixels, Image, ColourIndicies, block_x, block_y);
 
                 ImageData.AddRange(block_data);
 
@@ -584,9 +585,8 @@ namespace Hack.io.J3D
             return new Tuple<Dictionary<Color, int>, ushort[]>(colors_to_color_indexes, encoded_colors.ToArray());
         }
 
-        public static byte[] EncodeBlock(GXImageFormat Format, Bitmap Image, Dictionary<Color, int> ColourIndicies, int BlockX, int BlockY)
+        public static byte[] EncodeBlock(GXImageFormat Format, byte[] Pixels, Bitmap Image, Dictionary<Color, int> ColourIndicies, int BlockX, int BlockY)
         {
-            byte[] Pixels = Image.ToByteArray();
             byte[] EncodedBlock = new byte[Format == GXImageFormat.RGBA32 ? 64 : 32];
             int Offset = 0, CurrentBlockWidth = FormatDetails[Format].BlockWidth, CurrentBlockHeight = FormatDetails[Format].BlockHeight;
 
