@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Hack.io.Util;
+using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Imaging;
@@ -1219,28 +1220,6 @@ namespace Hack.io.J3D
             return (ushort)Result;
         }
         #endregion
-
-        public static byte[] ToByteArray(this Bitmap bitmap)
-        {
-            BitmapData bmpdata = null;
-            try
-            {
-                bmpdata = bitmap.LockBits(new Rectangle(0, 0, bitmap.Width, bitmap.Height), ImageLockMode.ReadOnly, bitmap.PixelFormat);
-                int numbytes = bmpdata.Stride * bitmap.Height;
-                byte[] bytedata = new byte[numbytes];
-                IntPtr ptr = bmpdata.Scan0;
-
-                Marshal.Copy(ptr, bytedata, 0, numbytes);
-
-                return bytedata;
-            }
-            finally
-            {
-                if (bmpdata != null)
-                    bitmap.UnlockBits(bmpdata);
-            }
-
-        }
 
         public static bool CompareBitmap(Bitmap bmp1, Bitmap bmp2)
         {
