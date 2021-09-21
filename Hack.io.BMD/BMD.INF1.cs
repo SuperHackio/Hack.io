@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using static Hack.io.J3D.J3DGraph;
@@ -8,12 +9,13 @@ namespace Hack.io.BMD
 {
     public partial class BMD
     {
-        public class INF1
+        public class INF1 : IEnumerable
         {
             public Node Root { get; set; } = null;
             public J3DLoadFlags ScalingRule { get; set; }
 
             private static readonly string Magic = "INF1";
+
 
             public INF1() { }
             public INF1(Stream BMD, out int VertexCount)
@@ -196,6 +198,36 @@ namespace Hack.io.BMD
                     return -1;
             }
 
+            public IEnumerator GetEnumerator() => new NodeEnumerator(Root);
+
+            private class NodeEnumerator : IEnumerator
+            {
+                private int index = -1;
+                private List<Node> flatnodes = new List<Node>();
+                public NodeEnumerator(Node start)
+                {
+                    Flatten(start, ref flatnodes);
+                }
+
+                private void Flatten(Node node, ref List<Node> output)
+                {
+                    output.Add(node);
+                    for (int i = 0; i < node.Children.Count; i++)
+                    {
+                        Flatten(node.Children[i], ref output);
+                    }
+                }
+
+                //IEnumerator and IEnumerable require these methods.
+                public IEnumerator GetEnumerator() => this;
+                //IEnumerator
+                public bool MoveNext() => ++index < flatnodes.Count;
+                //IEnumerable
+                public void Reset() => index = 0;
+                //IEnumerable
+                public object Current => flatnodes[index];
+            }
+
             public enum J3DLoadFlags
             {
                 // Scaling rule
@@ -218,5 +250,6 @@ namespace Hack.io.BMD
         }
 
         //=====================================================================
+
     }
 }

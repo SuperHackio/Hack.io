@@ -412,6 +412,24 @@ namespace Hack.io.BMD
                 return false;
             }
 
+            public void Sort(Comparison<Material> comparer)
+            {
+                m_Materials.Sort(comparer);
+            }
+            public static Comparison<Material> SortByName => new Comparison<Material>((x, y) => string.Compare(x.Name, y.Name, true));
+            public int IndexOf(Material mat)
+            {
+                for (int i = 0; i < m_Materials.Count; i++)
+                {
+                    if (object.ReferenceEquals(mat, m_Materials[i]))
+                    {
+                        return i;
+                    }
+                }
+                return -1;
+            }
+
+
             public void SetTextureNames(TEX1 textures)
             {
                 foreach (Material mat in m_Materials)

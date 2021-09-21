@@ -53,6 +53,13 @@ namespace Hack.io.BMD
             #region Fragment Shader
             Frag.AppendLine("#version 120");
             Frag.AppendLine();
+            for (int i = 0; i < 8; i++)
+            {
+                if (Material.Textures[i] is null)
+                    continue;
+                Frag.AppendLine("uniform sampler2D texture" + i.ToString() + ";");
+            }
+            Frag.AppendLine("float truncc1(float c)");
             Frag.AppendLine("{");
             Frag.AppendLine("    return (c == 0.0) ? 0.0 : ((fract(c) == 0.0) ? 1.0 : fract(c));");
             Frag.AppendLine("}");
@@ -67,11 +74,12 @@ namespace Hack.io.BMD
 
             for (int i = 0; i < 4; i++)
             {
-                Frag.AppendFormat(forceusa, "    vec4 {0} = vec4({1}, {2}, {3}, {4});\n", outputregs[i], Material.TevColors[i].Value.R, Material.TevColors[i].Value.G, Material.TevColors[i].Value.B, Material.TevColors[i].Value.A);
+                int _i = (i == 0) ? 3 : i - 1; // ???
+                Frag.AppendFormat(forceusa, "    vec4 {0} = vec4({1}, {2}, {3}, {4});\n", outputregs[i], Material.TevColors[_i].Value.R, Material.TevColors[_i].Value.G, Material.TevColors[_i].Value.B, Material.TevColors[_i].Value.A);
             }
             for (int i = 0; i < 4; i++)
             {
-                Frag.AppendFormat(forceusa, "    vec4 k{0} = vec4({1}, {2}, {3}, {4});\n", outputregs[i], Material.KonstColors[i].Value.R, Material.KonstColors[i].Value.G, Material.KonstColors[i].Value.B, Material.KonstColors[i].Value.A);
+                Frag.AppendFormat(forceusa, "    vec4 k{0} = vec4({1}, {2}, {3}, {4});\n", i, Material.KonstColors[i].Value.R, Material.KonstColors[i].Value.G, Material.KonstColors[i].Value.B, Material.KonstColors[i].Value.A);
             }
             Frag.AppendLine("    vec4 texcolor, rascolor, konst;");
 
@@ -87,7 +95,7 @@ namespace Hack.io.BMD
                 Frag.AppendLine("    konst.rgb = " + c_konstsel[(int)Material.ColorSels[i]] + ";");
                 Frag.AppendLine("    konst.a = " + a_konstsel[(int)Material.AlphaSels[i]] + ";");
                 if (Material.TevOrders[i].Value.TexMap != BMD.MAT3.TexMapId.Null && Material.TevOrders[i].Value.TexCoord != BMD.MAT3.TexCoordId.Null)
-                    Frag.AppendFormat("    texcolor = texture2D(texture{0}, gl_TexCoord[{1}].st);\n", Material.TevOrders[i].Value.TexMap, Material.TevOrders[i].Value.TexCoord);
+                    Frag.AppendFormat("    texcolor = texture2D(texture{0}, gl_TexCoord[{1}].st);\n", (int)Material.TevOrders[i].Value.TexMap, (int)Material.TevOrders[i].Value.TexCoord);
                 Frag.AppendLine("    rascolor = gl_Color;");
                 // TODO: take mat.TevOrder[i].ChanId into account
                 // TODO: tex/ras swizzle? (important or not?)
@@ -95,7 +103,7 @@ namespace Hack.io.BMD
 
                 if (Material.TevOrders[i].Value.ChannelId != BMD.MAT3.Material.TevOrder.GXColorChannelId.Color0A0)
                 {
-                    throw new Exception("PLEASE investigate how to support this!");
+                    //throw new Exception("PLEASE investigate how to support this!");
                 }
 
                 //TEV Stage Colour
@@ -169,12 +177,13 @@ namespace Hack.io.BMD
             if (Material.AlphCompare.Operation == BMD.MAT3.Material.AlphaCompare.AlphaOp.Or && (Material.AlphCompare.Comp0 == BMD.MAT3.Material.AlphaCompare.CompareType.Always || Material.AlphCompare.Comp1 == BMD.MAT3.Material.AlphaCompare.CompareType.Always))
             {
                 // always pass -- do nothing :)
+                Frag.AppendLine("    // Alpha test will ALWAYS PASS");
             }
             else if (Material.AlphCompare.Operation == BMD.MAT3.Material.AlphaCompare.AlphaOp.And && (Material.AlphCompare.Comp0 == BMD.MAT3.Material.AlphaCompare.CompareType.Never || Material.AlphCompare.Comp1 == BMD.MAT3.Material.AlphaCompare.CompareType.Never))
             {
                 // never pass
                 // (we did all those color/alpha calculations for uh, nothing ;_; )
-                Frag.AppendLine("    discard;");
+                Frag.AppendLine("    discard; //Alpha test will NEVER PASS");
             }
             else
             {

@@ -154,7 +154,38 @@ namespace Hack.io.BMD
                 foreach (var child in curNode.Children)
                     IterateHierarchyForSkeletonRecursive(child, processedJoints, parentIndex);
             }
+            internal void InitBoneMatricies(INF1 SceneGraph)
+            {
+                for (int i = 0; i < FlatSkeleton.Count; i++)
+                {
+                    Bone jnt = FlatSkeleton[i];
+                    foreach (INF1.Node node in SceneGraph)
+                    {
+                        if (node.Type != INF1.NodeType.Joint) continue;
+                        if (node.Index != i) continue;
 
+                        INF1.Node parentnode = node;
+                        do
+                        {
+                            if (parentnode.Parent == null)
+                            {
+                                parentnode = null;
+                                break;
+                            }
+
+                            parentnode = parentnode.Parent;
+
+                        } while (parentnode.Type != INF1.NodeType.Joint);
+
+                        if (parentnode != null)
+                            Matrix4.Mult(ref jnt.NormalMatrix, ref FlatSkeleton[parentnode.Index].CompiledMatrix, out jnt.CompiledMatrix);
+                        else
+                            jnt.CompiledMatrix = jnt.NormalMatrix;
+
+                        break;
+                    }
+                }
+            }
 
             public class Bone
             {
@@ -162,16 +193,16 @@ namespace Hack.io.BMD
                 public Bone Parent { get; internal set; }
                 public List<Bone> Children { get; private set; }
                 public Matrix4 InverseBindMatrix { get; private set; }
-                public Matrix4 TransformationMatrix => Matrix4.CreateScale(m_Scale) *
-                                           Matrix4.CreateFromQuaternion(m_Rotation) *
-                                           Matrix4.CreateTranslation(m_Translation);
+                public Matrix4 TransformationMatrix => SRTToMatrix(m_Scale, m_Rotation, m_Translation);
                 public SHP1.BoundingVolume Bounds { get; private set; }
 
                 private short m_MatrixType;
                 private bool InheritParentScale;
                 private Vector3 m_Scale;
-                private Quaternion m_Rotation;
+                private Vector3 m_Rotation;
                 private Vector3 m_Translation;
+                public Matrix4 CompiledMatrix;
+                public Matrix4 NormalMatrix;
 
                 public Bone(string name)
                 {
@@ -201,17 +232,19 @@ namespace Hack.io.BMD
                     float yConvRot = (float)(yRot * 180.0 / 32767.0);
                     float zConvRot = (float)(zRot * 180.0 / 32767.0);
 
-                    Vector3 rotFull = new Vector3((float)(xConvRot * (Math.PI / 180.0)), (float)(yConvRot * (Math.PI / 180.0)), (float)(zConvRot * (Math.PI / 180.0)));
+                    m_Rotation = new Vector3((float)(xConvRot * (Math.PI / 180.0)), (float)(yConvRot * (Math.PI / 180.0)), (float)(zConvRot * (Math.PI / 180.0)));
 
-                    m_Rotation = Quaternion.FromAxisAngle(new Vector3(0, 0, 1), rotFull.Z) *
-                                 Quaternion.FromAxisAngle(new Vector3(0, 1, 0), rotFull.Y) *
-                                 Quaternion.FromAxisAngle(new Vector3(1, 0, 0), rotFull.X);
+                    //m_Rotation = Quaternion.FromAxisAngle(new Vector3(0, 0, 1), rotFull.Z) *
+                    //             Quaternion.FromAxisAngle(new Vector3(0, 1, 0), rotFull.Y) *
+                    //             Quaternion.FromAxisAngle(new Vector3(1, 0, 0), rotFull.X);
 
                     BMD.Position += 0x02;
 
                     m_Translation = new Vector3(BitConverter.ToSingle(BMD.ReadReverse(0, 4), 0), BitConverter.ToSingle(BMD.ReadReverse(0, 4), 0), BitConverter.ToSingle(BMD.ReadReverse(0, 4), 0));
 
                     Bounds = new SHP1.BoundingVolume(BMD);
+                    CompiledMatrix = TransformationMatrix;
+                    NormalMatrix = TransformationMatrix;
                 }
 
                 public void SetInverseBindMatrix(Matrix4 matrix)
@@ -232,19 +265,19 @@ namespace Hack.io.BMD
                         Vector3 Euler = new Vector3();
 
                         float ysqr = m_Rotation.Y * m_Rotation.Y;
-
-                        float t0 = 2.0f * (m_Rotation.W * m_Rotation.X + m_Rotation.Y * m_Rotation.Z);
+                        //TODO: Fix this! It expects a Quaternion m_Rotation.W * m_Rotation.X...
+                        float t0 = 2.0f * (m_Rotation.X + m_Rotation.Y * m_Rotation.Z);
                         float t1 = 1.0f - 2.0f * (m_Rotation.X * m_Rotation.X + ysqr);
 
                         Euler.X = (float)Math.Atan2(t0, t1);
 
-                        float t2 = 2.0f * (m_Rotation.W * m_Rotation.Y - m_Rotation.Z * m_Rotation.X);
+                        float t2 = 2.0f * (m_Rotation.Y - m_Rotation.Z * m_Rotation.X);
                         t2 = t2 > 1.0f ? 1.0f : t2;
                         t2 = t2 < -1.0f ? -1.0f : t2;
 
                         Euler.Y = (float)Math.Asin(t2);
 
-                        float t3 = 2.0f * (m_Rotation.W * m_Rotation.Z + m_Rotation.X * m_Rotation.Y);
+                        float t3 = 2.0f * (m_Rotation.Z + m_Rotation.X * m_Rotation.Y);
                         float t4 = 1.0f - 2.0f * (ysqr + m_Rotation.Z * m_Rotation.Z);
 
                         Euler.Z = (float)Math.Atan2(t3, t4);
@@ -290,6 +323,25 @@ namespace Hack.io.BMD
                     }
 
                     return outList.ToArray();
+                }
+
+                private static Matrix4 SRTToMatrix(Vector3 scale, Vector3 rot, Vector3 trans)
+                {
+                    Matrix4 ret = Matrix4.Identity;
+
+                    Matrix4 mscale = Matrix4.CreateScale(scale);
+                    Matrix4 mxrot = Matrix4.CreateRotationX(rot.X);
+                    Matrix4 myrot = Matrix4.CreateRotationY(rot.Y);
+                    Matrix4 mzrot = Matrix4.CreateRotationZ(rot.Z);
+                    Matrix4 mtrans = Matrix4.CreateTranslation(trans);
+
+                    Matrix4.Mult(ref ret, ref mscale, out ret);
+                    Matrix4.Mult(ref ret, ref mxrot, out ret);
+                    Matrix4.Mult(ref ret, ref myrot, out ret);
+                    Matrix4.Mult(ref ret, ref mzrot, out ret);
+                    Matrix4.Mult(ref ret, ref mtrans, out ret);
+
+                    return ret;
                 }
             }
         }

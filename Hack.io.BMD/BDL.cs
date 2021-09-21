@@ -36,6 +36,7 @@ namespace Hack.io.BMD
             SkinningEnvelopes.SetInverseBindMatrices(Joints.FlatSkeleton);
             Shapes.SetVertexWeights(SkinningEnvelopes, PartialWeightData);
             Joints.InitBoneFamilies(Scenegraph);
+            Joints.InitBoneMatricies(Scenegraph);
             Materials = new MAT3(BDLFile);
             MatDisplayList = new MDL3(BDLFile);
             Textures = new TEX1(BDLFile);

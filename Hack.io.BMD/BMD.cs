@@ -66,6 +66,7 @@ namespace Hack.io.BMD
             SkinningEnvelopes.SetInverseBindMatrices(Joints.FlatSkeleton);
             Shapes.SetVertexWeights(SkinningEnvelopes, PartialWeightData);
             Joints.InitBoneFamilies(Scenegraph);
+            Joints.InitBoneMatricies(Scenegraph);
             Materials = new MAT3(BMD);
             if (BitConverter.ToInt32(BMD.ReadReverse(0, 4), 0) == 0x4D444C33)
             {
