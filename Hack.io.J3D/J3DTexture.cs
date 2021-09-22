@@ -69,7 +69,7 @@ namespace Hack.io.J3D
             /// </summary>
             public class TexEntry : List<Bitmap>
             {
-                public GXImageFormat Format { get; set; }
+                public GXImageFormat Format { get; set; } = GXImageFormat.CMPR;
                 public GXPaletteFormat PaletteFormat { get; set; }
                 public GXWrapMode WrapS { get; set; }
                 public GXWrapMode WrapT { get; set; }
@@ -78,12 +78,26 @@ namespace Hack.io.J3D
                 public float MinLOD { get; set; }
                 public float MaxLOD { get; set; }
                 public float LODBias { get; set; }
-                public bool EnableEdgeLoD { get; set; }
+                public bool EnableEdgeLOD { get; set; }
 
                 public Size LargestSize => new Size(this[0].Width, this[0].Height);
                 public Size SmallestSize => new Size(this[Count-1].Width, this[Count-1].Height);
 
-                public bool ImageEquals(TexEntry entry) => Util.ListEx.Equals(this, entry, J3D.JUtility.CompareBitmap);
+                public TexEntry() { }
+                public TexEntry(Bitmap Image, GXImageFormat ImageFormat = GXImageFormat.CMPR, GXPaletteFormat PaletteFormat = GXPaletteFormat.IA8, GXWrapMode WrapS = 0, GXWrapMode WrapT = 0, GXFilterMode MagFilter = 0, GXFilterMode MinFilter = 0, float Bias = 0.0f, bool EdgeLoD = false)
+                {
+                    Add(Image);
+                    Format = ImageFormat;
+                    this.PaletteFormat = PaletteFormat;
+                    this.WrapS = WrapS;
+                    this.WrapT = WrapT;
+                    MagnificationFilter = MagFilter;
+                    MinificationFilter = MinFilter;
+                    LODBias = Bias;
+                    EnableEdgeLOD = EdgeLoD;
+                }
+
+                public bool ImageEquals(TexEntry entry) => ListEx.Equals(this, entry, J3D.JUtility.CompareBitmap);
                 public override bool Equals(object obj)
                 {
                     return obj is TexEntry entry &&
@@ -96,7 +110,7 @@ namespace Hack.io.J3D
                            MinLOD == entry.MinLOD &&
                            MaxLOD == entry.MaxLOD &&
                            LODBias == entry.LODBias &&
-                           EnableEdgeLoD == entry.EnableEdgeLoD &&
+                           EnableEdgeLOD == entry.EnableEdgeLOD &&
                            Util.ListEx.Equals(this, entry, J3D.JUtility.CompareBitmap);
                 }
 
@@ -116,7 +130,7 @@ namespace Hack.io.J3D
                     hashCode = hashCode * -1521134295 + MinLOD.GetHashCode();
                     hashCode = hashCode * -1521134295 + MaxLOD.GetHashCode();
                     hashCode = hashCode * -1521134295 + LODBias.GetHashCode();
-                    hashCode = hashCode * -1521134295 + EnableEdgeLoD.GetHashCode();
+                    hashCode = hashCode * -1521134295 + EnableEdgeLOD.GetHashCode();
                     hashCode = hashCode * -1521134295 + Hack.io.Util.ListEx.GetHashCode(this);
                     return hashCode;
                 }
@@ -1280,11 +1294,11 @@ namespace Hack.io.J3D
             switch (Format)
             {
                 case GXImageFormat.C4:
-                    return 1 << 4;
+                    return 1 << 4; //16
                 case GXImageFormat.C8:
-                    return 1 << 8;
+                    return 1 << 8; //256
                 case GXImageFormat.C14X2:
-                    return 1 << 14;
+                    return 1 << 14; //16384
                 default:
                     throw new Exception("Not a Palette format!");
             }

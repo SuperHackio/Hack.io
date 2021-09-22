@@ -77,7 +77,7 @@ namespace Hack.io.TPL
                     MinificationFilter = (GXFilterMode)MinFilter,
                     WrapS = (GXWrapMode)WrapS,
                     WrapT = (GXWrapMode)WrapT,
-                    EnableEdgeLoD = EnableEdgeLOD,
+                    EnableEdgeLOD = EnableEdgeLOD,
                     MinLOD = MinLOD,
                     MaxLOD = MaxLOD
                 };
@@ -146,7 +146,7 @@ namespace Hack.io.TPL
                 TPLFile.WriteReverse(BitConverter.GetBytes((uint)this[i].MinificationFilter), 0, 4);
                 TPLFile.WriteReverse(BitConverter.GetBytes((uint)this[i].MagnificationFilter), 0, 4);
                 TPLFile.WriteReverse(BitConverter.GetBytes(this[i].LODBias), 0, 4);
-                TPLFile.WriteByte((byte)(this[i].EnableEdgeLoD ? 0x01 : 0x00));
+                TPLFile.WriteByte((byte)(this[i].EnableEdgeLOD ? 0x01 : 0x00));
                 TPLFile.WriteByte(0x00);
                 TPLFile.WriteByte((byte)(mips.Count-1));
                 //Unpacked - Rii told me to leave this one as 0 :)
@@ -272,9 +272,10 @@ namespace Hack.io.TPL
         /// <returns></returns>
         public static TPL Create(Bitmap Image, GXImageFormat ImageFormat = GXImageFormat.CMPR, GXPaletteFormat PaletteFormat = GXPaletteFormat.IA8, GXWrapMode WrapS = GXWrapMode.CLAMP, GXWrapMode WrapT = GXWrapMode.CLAMP, GXFilterMode MagFilter = GXFilterMode.Linear, GXFilterMode MinFilter = GXFilterMode.Linear, float Bias = 0.0f, bool EdgeLoD = false)
         {
-            TPL NewTPL = new TPL();
-            //TODO: Re-Implement this
-            //NewTPL.Images.Add(new TPLTexture((Bitmap)Image.Clone(), ImageFormat, PaletteFormat, WrapS, WrapT, MagFilter, MinFilter, Bias, EdgeLoD));
+            TPL NewTPL = new TPL
+            {
+                new TexEntry((Bitmap)Image.Clone(), ImageFormat, PaletteFormat, WrapS, WrapT, MagFilter, MinFilter, Bias, EdgeLoD)
+            };
             return NewTPL;
         }
         /// <summary>
@@ -293,9 +294,8 @@ namespace Hack.io.TPL
         public static TPL Create(Bitmap[] Images, GXImageFormat ImageFormat = GXImageFormat.CMPR, GXPaletteFormat PaletteFormat = GXPaletteFormat.IA8, GXWrapMode WrapS = GXWrapMode.CLAMP, GXWrapMode WrapT = GXWrapMode.CLAMP, GXFilterMode MagFilter = GXFilterMode.Linear, GXFilterMode MinFilter = GXFilterMode.Linear, float Bias = 0.0f, bool EdgeLoD = false)
         {
             TPL NewTPL = new TPL();
-            //TODO: Re-Implement this
-            //for (int i = 0; i < Images.Length; i++)
-            //    NewTPL.Images.Add(new TPLTexture((Bitmap)Images[i].Clone(), ImageFormat, PaletteFormat, WrapS, WrapT, MagFilter, MinFilter, Bias, EdgeLoD));
+            for (int i = 0; i < Images.Length; i++)
+                NewTPL.Add(new TexEntry((Bitmap)Images[i].Clone(), ImageFormat, PaletteFormat, WrapS, WrapT, MagFilter, MinFilter, Bias, EdgeLoD));
             return NewTPL;
         }
         /// <summary>
@@ -314,14 +314,14 @@ namespace Hack.io.TPL
         public static TPL Create(Bitmap[][] Images, GXImageFormat ImageFormat = GXImageFormat.CMPR, GXPaletteFormat PaletteFormat = GXPaletteFormat.IA8, GXWrapMode WrapS = GXWrapMode.CLAMP, GXWrapMode WrapT = GXWrapMode.CLAMP, GXFilterMode MagFilter = GXFilterMode.Linear, GXFilterMode MinFilter = GXFilterMode.Linear, float Bias = 0.0f, bool EdgeLoD = false)
         {
             TPL NewTPL = new TPL();
-
-            //TODO: Re-Implement this
-            //for (int i = 0; i < Images.Length; i++)
-            //{
-            //    TPLTexture temp = new TPLTexture() { Format = ImageFormat, PaletteFormat = PaletteFormat, WrapS = WrapS, WrapT = WrapT, MagnificationFilter = MagFilter, MinificationFilter = MinFilter, LODBias = Bias, EnableEdgeLoD = EdgeLoD };
-            //    for (int x = 0; x < Images[i].Length; x++)
-            //        temp[x] = (Bitmap)Images[i][x].Clone();
-            //}
+            
+            for (int i = 0; i < Images.Length; i++)
+            {
+                TexEntry temp = new TexEntry() { Format = ImageFormat, PaletteFormat = PaletteFormat, WrapS = WrapS, WrapT = WrapT, MagnificationFilter = MagFilter, MinificationFilter = MinFilter, LODBias = Bias, EnableEdgeLOD = EdgeLoD };
+                for (int x = 0; x < Images[i].Length; x++)
+                    temp.Add((Bitmap)Images[i][x].Clone());
+                NewTPL.Add(temp);
+            }
 
             return NewTPL;
         }

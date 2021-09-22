@@ -75,7 +75,14 @@ namespace Hack.io.BMD
             for (int i = 0; i < 4; i++)
             {
                 int _i = (i == 0) ? 3 : i - 1; // ???
-                Frag.AppendFormat(forceusa, "    vec4 {0} = vec4({1}, {2}, {3}, {4});\n", outputregs[i], Material.TevColors[_i].Value.R, Material.TevColors[_i].Value.G, Material.TevColors[_i].Value.B, Material.TevColors[_i].Value.A);
+                if (Material.TevColors[_i].HasValue)
+                {
+                    Frag.AppendFormat(forceusa, "    vec4 {0} = vec4({1}, {2}, {3}, {4});\n", outputregs[i], Material.TevColors[_i].Value.R, Material.TevColors[_i].Value.G, Material.TevColors[_i].Value.B, Material.TevColors[_i].Value.A);
+                }
+                else
+                {
+                    Frag.AppendFormat(forceusa, "    vec4 {0} = vec4({1}, {2}, {3}, {4});\n", outputregs[i], 1.0f, 0.0f, 1.0f, 1.0f);
+                }
             }
             for (int i = 0; i < 4; i++)
             {
@@ -92,8 +99,12 @@ namespace Hack.io.BMD
                 // if they're selected into a, b or c
                 string rout, a, b, c, d, operation = "";
 
-                Frag.AppendLine("    konst.rgb = " + c_konstsel[(int)Material.ColorSels[i]] + ";");
-                Frag.AppendLine("    konst.a = " + a_konstsel[(int)Material.AlphaSels[i]] + ";");
+                if ((int)Material.ColorSels[i] != 255)
+                    Frag.AppendLine("    konst.rgb = " + c_konstsel[(int)Material.ColorSels[i]] + ";");
+                else
+                    Frag.AppendLine("    konst.rgb = " + c_konstsel[0] + ";");
+                if ((int)Material.AlphaSels[i] != 255)
+                    Frag.AppendLine("    konst.a = " + a_konstsel[(int)Material.AlphaSels[i]] + ";");
                 if (Material.TevOrders[i].Value.TexMap != BMD.MAT3.TexMapId.Null && Material.TevOrders[i].Value.TexCoord != BMD.MAT3.TexCoordId.Null)
                     Frag.AppendFormat("    texcolor = texture2D(texture{0}, gl_TexCoord[{1}].st);\n", (int)Material.TevOrders[i].Value.TexMap, (int)Material.TevOrders[i].Value.TexCoord);
                 Frag.AppendLine("    rascolor = gl_Color;");

@@ -19,7 +19,7 @@ namespace Hack.io.BTI
         public float MinLOD => base[0].MinLOD;
         public float MaxLOD => base[0].MaxLOD;
         public float LODBias => base[0].LODBias;
-        public bool EnableEdgeLoD => base[0].EnableEdgeLoD;
+        public bool EnableEdgeLoD => base[0].EnableEdgeLOD;
 
         public Size LargestSize => base[0].LargestSize;
         public Size SmallestSize => base[0].SmallestSize;
@@ -35,8 +35,8 @@ namespace Hack.io.BTI
         //public float MaxLOD { get; set; } // Fixed point number, 1/8 = conversion (ToDo: is this multiply by 8 or divide...)
         //public bool EnableEdgeLOD { get; set; }
         //public float LODBias { get; set; } // Fixed point number, 1/100 = conversion
-        public bool ClampLODBias { get; set; }
-        public byte MaxAnisotropy { get; set; }
+        public bool ClampLODBias { get; set; } = true;
+        public byte MaxAnisotropy { get; set; } = 0;
 
         internal BTI() { }
         public BTI(string filename)
@@ -55,28 +55,24 @@ namespace Hack.io.BTI
         }
         public new int Count => base[0].Count;
 
-        ///// <summary>
-        ///// Creates a BTI from a bitmap[]
-        ///// </summary>
-        ///// <param name="Source"></param>
-        //public BTI(Bitmap[] Source, GXImageFormat format, GXPaletteFormat palette = GXPaletteFormat.IA8, JUTTransparency Alpha = JUTTransparency.OPAQUE, GXWrapMode S = GXWrapMode.CLAMP, GXWrapMode T = GXWrapMode.CLAMP, GXFilterMode MagFilter = GXFilterMode.Nearest, GXFilterMode MinFilter = GXFilterMode.Nearest)
-        //{
-        //    Format = format;
-        //    PaletteFormat = palette;
-        //    AlphaSetting = Alpha;
-        //    WrapS = S;
-        //    WrapT = T;
-        //    MagnificationFilter = MagFilter;
-        //    MinificationFilter = MinFilter;
-        //    mipmaps.Add(Source[0]);
-        //    for (int i = 1; i < Source.Length; i++)
-        //    {
-        //        if (Source[i].Width < 1 || Source[i].Height < 1)
-        //            break;
-        //        if (Source[i].Width == Source[i - 1].Width / 2 && Source[i].Height == Source[i - 1].Height / 2)
-        //            mipmaps.Add(Source[i]);
-        //    }
-        //}
+        /// <summary>
+        /// Creates a BTI from a bitmap[]
+        /// </summary>
+        /// <param name="Source"></param>
+        public BTI(Bitmap[] Source, GXImageFormat format, GXPaletteFormat palette = GXPaletteFormat.IA8, JUTTransparency Alpha = JUTTransparency.OPAQUE, GXWrapMode S = GXWrapMode.CLAMP, GXWrapMode T = GXWrapMode.CLAMP, GXFilterMode MagFilter = GXFilterMode.Nearest, GXFilterMode MinFilter = GXFilterMode.Nearest)
+        {
+            AlphaSetting = Alpha;
+            TexEntry entry = new TexEntry()
+            {
+                Format = format,
+                PaletteFormat = palette,
+                WrapS = S,
+                WrapT = T,
+                MagnificationFilter = MagFilter,
+                MinificationFilter = MinFilter
+            };
+            entry.AddRange(Source);
+        }
 
         public override void Save(string filename)
         {
@@ -146,7 +142,7 @@ namespace Hack.io.BTI
                 MinificationFilter = (GXFilterMode)MinificationFilter,
                 WrapS = (GXWrapMode)WrapS,
                 WrapT = (GXWrapMode)WrapT,
-                EnableEdgeLoD = EnableEdgeLOD,
+                EnableEdgeLOD = EnableEdgeLOD,
                 MinLOD = MinLOD,
                 MaxLOD = MaxLOD
             };
@@ -283,10 +279,8 @@ namespace Hack.io.BTI
         /// <param name="Source"></param>
         public static explicit operator BTI(Bitmap Source)
         {
-            //BTI NewImage = new BTI { Format = GXImageFormat.CMPR };
-            //NewImage.mipmaps.Add(Source);
-            //return NewImage;
-            return null;
+            BTI NewImage = new BTI { new TexEntry() { Source } };
+            return NewImage;
         }
         /// <summary>
         /// Cast Bitmaps to a BTI
@@ -294,17 +288,10 @@ namespace Hack.io.BTI
         /// <param name="Source"></param>
         public static explicit operator BTI(Bitmap[] Source)
         {
-            //BTI NewImage = new BTI { Format = GXImageFormat.CMPR };
-            //NewImage.mipmaps.Add(Source[0]);
-            //for (int i = 1; i < Source.Length; i++)
-            //{
-            //    if (Source[i].Width < 1 || Source[i].Height < 1)
-            //        break;
-            //    if (Source[i].Width == Source[i - 1].Width / 2 && Source[i].Height == Source[i - 1].Height / 2)
-            //        NewImage.mipmaps.Add(Source[i]);
-            //}
-            //return NewImage;
-            return null;
+            TexEntry entry = new TexEntry() { MaxLOD = Source.Length-1 };
+            entry.AddRange(Source);
+            BTI NewImage = new BTI { entry };
+            return NewImage;
         }
 
         //=====================================================================

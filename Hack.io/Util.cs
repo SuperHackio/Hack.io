@@ -450,8 +450,10 @@ namespace Hack.io.Util
         /// <returns></returns>
         public static Bitmap FromByteArray(byte[] data, int width, int height, int stride, PixelFormat format)
         {
-            IntPtr ptr = Marshal.UnsafeAddrOfPinnedArrayElement(data, 0);
-            Bitmap result = new Bitmap(width, height, stride, format, ptr);
+            Bitmap result = new Bitmap(width, height, format);
+            BitmapData d = result.LockBits(new Rectangle(0, 0, result.Width, result.Height), ImageLockMode.ReadWrite, format);
+            Marshal.Copy(data, 0, d.Scan0, data.Length);
+            result.UnlockBits(d);
             return result;
         }
         /// <summary>
@@ -491,17 +493,19 @@ namespace Hack.io.Util
         /// </summary>
         /// <param name="imageA"></param>
         /// <param name="imageB"></param>
+        /// <param name="width"></param>
+        /// <param name="height"></param>
         /// <param name="t"></param>
         /// <param name="interpolationMode"></param>
         /// <returns></returns>
-        public static Bitmap Lerp(Bitmap imageA, Bitmap imageB, float t, InterpolationMode interpolationMode = InterpolationMode.Bilinear)
+        public static Bitmap Lerp(Bitmap imageA, Bitmap imageB, int width, int height, float t, InterpolationMode interpolationMode = InterpolationMode.Bilinear)
         {
+            t = t.Clamp(0, 1);
             if (imageA.PixelFormat != imageB.PixelFormat)
                 throw new Exception("Pixel format mis-match!");
-
-            Size max = (imageA.Width > imageB.Width && imageA.Height > imageB.Height) ? imageA.Size : imageB.Size;
-            Bitmap imageARescale = ResizeImage(imageA, max.Width, max.Height, interpolationMode);
-            Bitmap imageBRescale = ResizeImage(imageB, max.Width, max.Height, interpolationMode);
+            
+            Bitmap imageARescale = ResizeImage(imageA, width, height, interpolationMode);
+            Bitmap imageBRescale = ResizeImage(imageB, width, height, interpolationMode);
             
             byte[] imageAbytes = imageARescale.ToByteArray();
             byte[] imageBbytes = imageBRescale.ToByteArray();
@@ -511,8 +515,9 @@ namespace Hack.io.Util
             {
                 resultbytes[i] = MathEx.Lerp(imageAbytes[i], imageBbytes[i], t);
             }
-
-            return FromByteArray(resultbytes, max.Width, max.Height, 2, imageA.PixelFormat);
+            imageARescale.Dispose();
+            imageBRescale.Dispose();
+            return FromByteArray(resultbytes, width, height, 4, imageA.PixelFormat);
         }
     }
     /// <summary>
