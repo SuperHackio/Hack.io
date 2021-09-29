@@ -557,7 +557,7 @@ namespace Hack.io.BCSV
                 _Bitmask = value;
             }
         }
-        private uint _Bitmask;
+        private uint _Bitmask = 0xFFFFFFFF;
         /// <summary>
         /// The number of bits to shift while reading the value from the file
         /// </summary>
@@ -665,7 +665,7 @@ namespace Hack.io.BCSV
         /// Returns a string that represents the current object
         /// </summary>
         /// <returns></returns>
-        public override string ToString() => base.ToString();
+        public override string ToString() => $"0x{HashName.ToString("X8")} - {DataType.ToString()}";
         /// <summary>
         /// Compares this BCSVField to another BCSVField.<para/>NOTE: This check excludes AutoRecalc and the Automatically Calculated Entry Offset variable
         /// </summary>
