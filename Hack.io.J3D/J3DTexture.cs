@@ -1,6 +1,7 @@
 ﻿using Hack.io.Util;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
@@ -134,6 +135,21 @@ namespace Hack.io.J3D
                     hashCode = hashCode * -1521134295 + Hack.io.Util.ListEx.GetHashCode(this);
                     return hashCode;
                 }
+
+                public void CopyTo(TexEntry destination)
+                {
+                    destination.Format = Format;
+                    destination.PaletteFormat = PaletteFormat;
+                    destination.WrapS = WrapS;
+                    destination.WrapT = WrapT;
+                    destination.MagnificationFilter = MagnificationFilter;
+                    destination.MinificationFilter = MinificationFilter;
+                    destination.MinLOD = MinLOD;
+                    destination.MaxLOD = MaxLOD;
+                    destination.EnableEdgeLOD = EnableEdgeLOD;
+                    for (int i = 0; i < Count; i++)
+                        destination.Add((Bitmap)this[i].Clone());
+                }
             }
         }
 
@@ -148,11 +164,6 @@ namespace Hack.io.J3D
                 ImageWidth = (ushort)(ImageWidth / 2);
                 ImageHeight = (ushort)(ImageHeight / 2);
             }
-            //int oldWidth = ImageWidth % 4 != 0 ? (ImageWidth / 4) * 4 + 4 : ImageWidth;
-            //int FullWidth = oldWidth % 8 != 0 ? (oldWidth / 8) * 8 + 8 : oldWidth;
-
-            //int oldHeight = ImageHeight % 4 != 0 ? (ImageHeight / 4) * 4 + 4 : ImageHeight;
-            //int FullHeight = oldHeight % 8 != 0 ? (oldHeight / 8) * 8 + 8 : oldHeight;
 
             int BlockCountX = (int)Math.Ceiling((ImageWidth + (ImageWidth % FormatDetails[Format].BlockWidth)) / (float)FormatDetails[Format].BlockWidth);
             int BlockCountY = (int)Math.Ceiling((ImageHeight + (ImageHeight % FormatDetails[Format].BlockHeight)) / (float)FormatDetails[Format].BlockHeight);
@@ -249,8 +260,21 @@ namespace Hack.io.J3D
         public static Bitmap DecodeImage(byte[] ImageData, byte[] PaletteData, GXImageFormat Format, GXPaletteFormat? PaletteFormat, int? ColourCounts, int Width, int Height)
         {
             Color[] PaletteColours = null;
-            if (PaletteData != null)
+            if (PaletteData != null && PaletteData.Length > 0)
                 PaletteColours = DecodePalette(PaletteData, PaletteFormat, ColourCounts, Format);
+            return DecodeImage(ImageData, PaletteColours, Format, Width, Height);
+        }
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="ImageData"></param>
+        /// <param name="PaletteColours"></param>
+        /// <param name="Format"></param>
+        /// <param name="Width"></param>
+        /// <param name="Height"></param>
+        /// <returns></returns>
+        public static Bitmap DecodeImage(byte[] ImageData, Color[] PaletteColours, GXImageFormat Format, int Width, int Height)
+        {
             int BlockWidth = FormatDetails[Format].BlockWidth, BlockHeight = FormatDetails[Format].BlockHeight, BlockDataSize = Format == GXImageFormat.RGBA32 ? 64 : 32,
                 offset = 0, BlockX = 0, BlockY = 0, XInBlock = 0, YInBlock = 0;
             Bitmap Result = new Bitmap(Width, Height, PixelFormat.Format32bppArgb);
@@ -464,7 +488,7 @@ namespace Hack.io.J3D
         /// <param name="PaletteFormat"></param>
         public static void GetImageAndPaletteData(ref List<byte> ImageData, ref List<byte> PaletteData, Bitmap Image, GXImageFormat Format, GXPaletteFormat PaletteFormat)
         {
-            Tuple<Dictionary<Color, int>, ushort[]> Palette = CreatePalette(Image, Format, PaletteFormat);
+            Tuple<Dictionary<Color, int>, ushort[]> Palette = Format.IsPaletteFormat() ? CreatePalette(Image, Format, PaletteFormat) : new Tuple<Dictionary<Color, int>, ushort[]>(null, null);
             PaletteData = EncodePalette(Palette.Item2, Format).ToList();
             EncodeImage(ref ImageData, Image, Format, Palette.Item1);
         }
@@ -523,10 +547,10 @@ namespace Hack.io.J3D
                     colors_to_color_indexes.Add(Col, encoded_colors.IndexOf(ColEncoded));
             }
 
-            if (encoded_colors.Count > GetMaxColours(Format) && Format == GXImageFormat.C14X2)
+            if (encoded_colors.Count > GetMaxColours(Format))
             {
                 // If the image has more colors than the selected image format can support, we automatically reduce the number of colors.
-                //For C4 and C8, the colors should have already been reduced by Pillow's quantize method.
+                // For C4 and C8, the colors should have already been reduced by Pillow's quantize method.
                 // So the maximum number of colors can only be exceeded for C14X2.
 
                 Color[] LimitedPalette = CreateLimitedPalette(Images, GetMaxColours(Format), PaletteFormat != GXPaletteFormat.RGB565);
@@ -931,12 +955,12 @@ namespace Hack.io.J3D
                     {
                         int z = ((y * Images[i].Width) + x) * 4;
                         Color Col = Color.FromArgb(ImageData[i][z + 3], ImageData[i][z + 2], ImageData[i][z + 1], ImageData[i][z]);
-                        if (!Alpha)
-                            Col = Color.FromArgb(Col.R, Col.G, Col.B);
-                        else if (Col.A == 0)
+                        if (Col.A == 0)
                         {
                             if (already_have_zero_alpha_color)
                                 continue;
+                            if (!Alpha)
+                                Col = Color.FromArgb(0, 0, 0);
                             already_have_zero_alpha_color = true;
                         }
                         all_pixel_colors.Add(Col);
@@ -968,12 +992,12 @@ namespace Hack.io.J3D
                 {
                     int z = ((y * Image.Width) + x) * 4;
                     Color Col = Color.FromArgb(ImageData[z + 3], ImageData[z + 2], ImageData[z + 1], ImageData[z]);
-                    if (!Alpha)
-                        Col = Color.FromArgb(Col.R, Col.G, Col.B);
-                    else if (Col.A == 0)
+                    if (Col.A == 0)
                     {
                         if (already_have_zero_alpha_color)
                             continue;
+                        if (!Alpha)
+                            Col = Color.FromArgb(0, 0, 0);
                         already_have_zero_alpha_color = true;
                     }
                     all_pixel_colors.Add(Col);
@@ -1010,10 +1034,14 @@ namespace Hack.io.J3D
 
         public static Color AverageColours(List<Color> Colours)
         {
-            Color transparent_color = Colours.FirstOrDefault(O => O.A == 0);
-            if (transparent_color == null)
-                // Need to ensure a fully transparent color exists in the final palette if one existed originally.
-                return transparent_color;
+            for (int i = 0; i < Colours.Count; i++)
+            {
+                if (Colours[i].A == 0)
+                {
+                    // Need to ensure a fully transparent color exists in the final palette if one existed originally.
+                    return Colours[i];
+                }
+            }
 
             int RedSum = 0, GreenSum = 0, BlueSum = 0, AlphaSum = 0;
             for (int i = 0; i < Colours.Count; i++)
