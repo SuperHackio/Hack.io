@@ -9,7 +9,7 @@ namespace Hack.io.BMD
 {
     public enum ShaderAttributeIds
     {
-        None = 0,
+        PosMtxIndex = 0,
         Position = 1,
         Normal = 2,
         Binormal = 3,
@@ -23,31 +23,65 @@ namespace Hack.io.BMD
         Tex5 = 11,
         Tex6 = 12,
         Tex7 = 13,
-        PosMtxIndex = 14,
     }
 
     public static class ShaderGenerator
     {
-        public static (string Vert, string Frag) GenerateShader(BMD.MAT3.Material Material)
+        public static (string Vert, string Frag) GenerateShader(BMD.MAT3.Material Material, BMD.SHP1.Shape shape)
         {
             CultureInfo forceusa = new CultureInfo("en-US");
             StringBuilder Vert = new StringBuilder(), Frag = new StringBuilder();
 
             #region Vertex Shader
-            Vert.AppendLine("#version 120"); //TODO: Upgrade version
-            Vert.AppendLine();
-            Vert.AppendLine("void main()");
-            Vert.AppendLine("{");
-            Vert.AppendLine("    gl_Position = gl_ModelViewProjectionMatrix * gl_Vertex;");
-            Vert.AppendLine("    gl_FrontColor = gl_Color;");
-            Vert.AppendLine("    gl_FrontSecondaryColor = gl_SecondaryColor;");
-            for (int i = 0; i < Material.TexCoord1Gens.Length; i++)
+            Vert.AppendLine("#version 330");
+            //TODO: J3DView has 2 lines I can't figure out what to do with
+            
+            string position = "";
+            switch (shape.MatrixType)
             {
-                if (!Material.TexCoord1Gens[i].HasValue)
-                    continue;
-                Vert.AppendFormat("    gl_TexCoord[{0}] = {1};\n", i, texgensrc[(int)Material.TexCoord1Gens[i].Value.Source]);
+                case BMD.DisplayFlags.SingleMatrix:
+                    Vert.AppendLine("uniform int matrix_index;");
+                    Vert.AppendLine("uniform samplerBuffer matrix_table;");
+                    Vert.AppendLine("#define MATRIX_ROW(i) texelFetch(matrix_table,3*matrix_index + i)");
+                    position = "view_matrix*vec4(dot(MATRIX_ROW(0),position),dot(MATRIX_ROW(1),position),dot(MATRIX_ROW(2),position),1.0)";
+                    break;
+                case BMD.DisplayFlags.Billboard:
+                    position = "(position.xyz + view_matrix[3])";
+                    break;
+                case BMD.DisplayFlags.BillboardY:
+                    throw new Exception("No Y Billboard support!");
+                case BMD.DisplayFlags.MultiMatrix:
+                    Vert.AppendLine($"layout(location={(int)BMD.GXVertexAttribute.PositionMatrixIdx}) in int matrix_index;");
+                    Vert.AppendLine("uniform samplerBuffer matrix_table;");
+                    Vert.AppendLine("#define MATRIX_ROW(i) texelFetch(matrix_table,3*matrix_index + i)");
+                    position = "view_matrix*vec4(dot(MATRIX_ROW(0),position),dot(MATRIX_ROW(1),position),dot(MATRIX_ROW(2),position),1.0)";
+                    break;
+                default:
+                    throw new Exception();
             }
-            Vert.AppendLine("}");
+
+            if (shape.Descriptor.CheckAttribute(BMD.GXVertexAttribute.Position))
+                Vert.AppendLine($"layout(location={(int)BMD.GXVertexAttribute.Position}) in vec4 position;");
+
+            if (shape.Descriptor.CheckAttribute(BMD.GXVertexAttribute.Normal))
+                Vert.AppendLine($"layout(location={(int)BMD.GXVertexAttribute.Position}) in vec3 normal;");
+
+
+            if (shape.Descriptor.CheckAttribute(BMD.GXVertexAttribute.Color0))
+                Vert.AppendLine($"layout(location={(int)BMD.GXVertexAttribute.Position}) in vec4 color0;");
+            if (shape.Descriptor.CheckAttribute(BMD.GXVertexAttribute.Color1))
+                Vert.AppendLine($"layout(location={(int)BMD.GXVertexAttribute.Position}) in vec4 color1;");
+
+            for (int i = 0; i < 8; i++)
+            {
+                if (!shape.Descriptor.CheckAttribute(BMD.GXVertexAttribute.Tex0 + i))
+                    continue;
+                Vert.AppendLine($"layout(location={(int)(BMD.GXVertexAttribute.Tex0 + i)}) in vec2 texcoord{i};");
+            }
+
+            Vert.AppendLine();
+            Vert.AppendLine("\nvoid main()\n{");
+            Vert.AppendLine($"gl_Position = projection_matrix*vec4({position},1.0);");
             #endregion
 
             #region Fragment Shader
@@ -258,7 +292,7 @@ namespace Hack.io.BMD
                                       "k0.r", "k1.r", "k2.r", "k3.r", "k0.g", "k1.g", "k2.g", "k3.g",
                                       "k0.b", "k1.b", "k2.b", "k3.b", "k0.a", "k1.a", "k2.a", "k3.a" };
 
-        static string[] tevbias = { "0.0", "0.5", "-0.5" };
+        static string[] tevbias = { "0.0", "0.5", "-0.5","0.0" };
         static string[] tevscale = { "1.0", "2.0", "4.0", "0.5" };
 
         static string[] alphacompare = { "{0} != {0}", "{0} < {1}", "{0} == {1}", "{0} <= {1}", "{0} > {1}", "{0} != {1}", "{0} >= {1}", "{0} == {0}" };

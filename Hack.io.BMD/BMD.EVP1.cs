@@ -16,6 +16,21 @@ namespace Hack.io.BMD
 
             private static readonly string Magic = "EVP1";
 
+            public Weight this[Weight target]
+            {
+                get
+                {
+                    for (int i = 0; i < Weights.Count; i++)
+                    {
+                        if (ReferenceEquals(target, Weights[i]))
+                        {
+                            return target;
+                        }
+                    }
+                    throw new Exception();
+                }
+            }
+
             public EVP1(Stream BMD)
             {
                 int ChunkStart = (int)BMD.Position;

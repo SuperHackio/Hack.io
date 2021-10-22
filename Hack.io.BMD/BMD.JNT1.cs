@@ -193,14 +193,17 @@ namespace Hack.io.BMD
                 public Bone Parent { get; internal set; }
                 public List<Bone> Children { get; private set; }
                 public Matrix4 InverseBindMatrix { get; private set; }
-                public Matrix4 TransformationMatrix => SRTToMatrix(m_Scale, m_Rotation, m_Translation);
+                public Matrix4 TransformationMatrix => SRTToMatrix();
                 public SHP1.BoundingVolume Bounds { get; private set; }
 
                 private short m_MatrixType;
                 private bool InheritParentScale;
                 private Vector3 m_Scale;
+                public Vector3 Scale => m_Scale;
                 private Vector3 m_Rotation;
+                public Quaternion Rotation => Quaternion.FromAxisAngle(new Vector3(0, 0, 1), m_Rotation.Z) * Quaternion.FromAxisAngle(new Vector3(0, 1, 0), m_Rotation.Y) * Quaternion.FromAxisAngle(new Vector3(1, 0, 0), m_Rotation.X);
                 private Vector3 m_Translation;
+                public Vector3 Translation => m_Translation;
                 public Matrix4 CompiledMatrix;
                 public Matrix4 NormalMatrix;
 
@@ -325,23 +328,27 @@ namespace Hack.io.BMD
                     return outList.ToArray();
                 }
 
-                private static Matrix4 SRTToMatrix(Vector3 scale, Vector3 rot, Vector3 trans)
+                private Matrix4 SRTToMatrix()
                 {
-                    Matrix4 ret = Matrix4.Identity;
+                    Bone curJoint = this;
 
-                    Matrix4 mscale = Matrix4.CreateScale(scale);
-                    Matrix4 mxrot = Matrix4.CreateRotationX(rot.X);
-                    Matrix4 myrot = Matrix4.CreateRotationY(rot.Y);
-                    Matrix4 mzrot = Matrix4.CreateRotationZ(rot.Z);
-                    Matrix4 mtrans = Matrix4.CreateTranslation(trans);
+                    Matrix4 cumulativeTransform = Matrix4.Identity;
+                    Bone prevJoint = null;
+                    while (curJoint != null)
+                    {
+                        Vector3 scale = curJoint.Scale;
+                        if (prevJoint != null && !prevJoint.InheritParentScale)
+                            scale = Vector3.One;
+                        Matrix4 jointMatrix = Matrix4.CreateScale(scale) *
+                                              Matrix4.CreateFromQuaternion(curJoint.Rotation) *
+                                              Matrix4.CreateTranslation(curJoint.Translation);
+                        cumulativeTransform *= jointMatrix;
 
-                    Matrix4.Mult(ref ret, ref mscale, out ret);
-                    Matrix4.Mult(ref ret, ref mxrot, out ret);
-                    Matrix4.Mult(ref ret, ref myrot, out ret);
-                    Matrix4.Mult(ref ret, ref mzrot, out ret);
-                    Matrix4.Mult(ref ret, ref mtrans, out ret);
+                        prevJoint = curJoint;
+                        curJoint = curJoint.Parent;
+                    }
 
-                    return ret;
+                    return cumulativeTransform;
                 }
             }
         }

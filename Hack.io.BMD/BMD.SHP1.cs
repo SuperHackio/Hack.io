@@ -136,22 +136,22 @@ namespace Hack.io.BMD
                                         drw1Index = Shapes[i].Packets[curPacketIndex].MatrixIndices[(int)vert.PositionMatrixIDxIndex];
                                     }
 
-                                    if (drawList.WeightTypeCheck[(int)drw1Index])
+                                    if (drawList.IsPartialWeight[(int)drw1Index])
                                     {
-                                        int evp1Index = drawList.Indices[(int)drw1Index];
+                                        int evp1Index = drawList.TransformIndexTable[(int)drw1Index];
                                         vert.SetWeight(envelopes.Weights[evp1Index]);
                                     }
                                     else
                                     {
                                         EVP1.Weight vertWeight = new EVP1.Weight();
-                                        vertWeight.AddWeight(1.0f, drawList.Indices[(int)drw1Index]);
+                                        vertWeight.AddWeight(1.0f, drawList.TransformIndexTable[(int)drw1Index]);
                                         vert.SetWeight(vertWeight);
                                     }
                                 }
                                 else
                                 {
                                     EVP1.Weight vertWeight = new EVP1.Weight();
-                                    vertWeight.AddWeight(1.0f, drawList.Indices[Shapes[i].Packets[j].MatrixIndices[0]]);
+                                    vertWeight.AddWeight(1.0f, drawList.TransformIndexTable[Shapes[i].Packets[j].MatrixIndices[0]]);
                                     vert.SetWeight(vertWeight);
                                 }
                             }
