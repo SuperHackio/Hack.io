@@ -96,7 +96,9 @@ namespace Hack.io.BMD
                                                       BitConverter.ToSingle(BMD.ReadReverse(0, 4), 0), BitConverter.ToSingle(BMD.ReadReverse(0, 4), 0), BitConverter.ToSingle(BMD.ReadReverse(0, 4), 0), BitConverter.ToSingle(BMD.ReadReverse(0, 4), 0),
                                                       BitConverter.ToSingle(BMD.ReadReverse(0, 4), 0), BitConverter.ToSingle(BMD.ReadReverse(0, 4), 0), BitConverter.ToSingle(BMD.ReadReverse(0, 4), 0), BitConverter.ToSingle(BMD.ReadReverse(0, 4), 0));
 
-                    InverseBindMatrices.Add(new Matrix4(invBind.Row0, invBind.Row1, invBind.Row2, Vector4.UnitW));
+                    Matrix4 BindMatrix = new Matrix4(invBind.Row0, invBind.Row1, invBind.Row2, Vector4.UnitW);
+                    BindMatrix.Transpose();
+                    InverseBindMatrices.Add(BindMatrix);
                 }
 
                 BMD.Position = ChunkStart + ChunkSize;
