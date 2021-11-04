@@ -48,14 +48,21 @@ namespace Hack.io.BCK
         /// <param name="filename"></param>
         public BCK(string filename)
         {
-            FileStream BCKFile = new FileStream(filename, FileMode.Open);
-
-            Read(BCKFile);
-
-            BCKFile.Close();
+            FileStream BTPFile = new FileStream(filename, FileMode.Open);
+            Read(BTPFile);
+            BTPFile.Close();
             Name = filename;
         }
-
+        /// <summary>
+        /// Open a BCK from a stream
+        /// </summary>
+        /// <param name="BTPFile"></param>
+        ///<param name="filename"></param>
+        public BCK(Stream BTPFile, string filename = null)
+        {
+            Read(BTPFile);
+            Name = filename;
+        }
 
         /// <summary>
         /// Save a BCK to a file
@@ -69,6 +76,16 @@ namespace Hack.io.BCK
 
             BCKFile.Close();
             Name = filename;
+        }
+        /// <summary>
+        /// Save the BCK to a MemoryStream
+        /// </summary>
+        /// <returns></returns>
+        public MemoryStream Save()
+        {
+            MemoryStream ms = new MemoryStream();
+            Write(ms);
+            return ms;
         }
         /// <summary>
         /// !! Hack.io.BMD Is required to use this !!<para/>Read in the Names of Bones from a model file. The file must have the same amount of bones as there are JointAnimations
@@ -620,5 +637,27 @@ namespace Hack.io.BCK
         /// <param name="RIGHT"></param>
         /// <returns></returns>
         public static bool operator !=(BCK LEFT, BCK RIGHT) => !(LEFT == RIGHT);
+
+        //=====================================================================
+
+        /// <summary>
+        /// Cast a BTPK to a RARCFile
+        /// </summary>
+        /// <param name="x"></param>
+        public static implicit operator RARC.RARC.File(BCK x)
+        {
+            return new RARC.RARC.File(x.Name, x.Save());
+        }
+
+        /// <summary>
+        /// Cast a RARCFile to a BTP
+        /// </summary>
+        /// <param name="x"></param>
+        public static implicit operator BCK(RARC.RARC.File x)
+        {
+            return new BCK((MemoryStream)x, x.Name);
+        }
+
+        //=====================================================================
     }
 }
