@@ -45,11 +45,54 @@ namespace Hack.io.Util
         /// <summary>
         /// 
         /// </summary>
+        /// <param name="a"></param>
+        /// <param name="b"></param>
+        /// <returns></returns>
+        public static Int24 operator +(Int24 a, Int24 b) => new Int24(a.Value + b.Value);
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="a"></param>
+        /// <param name="b"></param>
+        /// <returns></returns>
+        public static int operator +(int a, Int24 b) => a + b.Value;
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="a"></param>
+        /// <param name="b"></param>
+        /// <returns></returns>
+        public static long operator +(uint a, Int24 b) => a + b.Value;
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="a"></param>
+        /// <param name="b"></param>
+        /// <returns></returns>
+        public static long operator +(long a, Int24 b) => a + b.Value;
+        /// <summary>
+        /// 
+        /// </summary>
         /// <returns></returns>
         public override string ToString() => Value.ToString();
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <returns></returns>
+        public string ToString(IFormatProvider provider) => Value.ToString(provider);
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <returns></returns>
+        public string ToString(string format) => Value.ToString(format);
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <returns></returns>
+        public string ToString(string format, IFormatProvider provider) => Value.ToString(format, provider);
     }
     /// <summary>
-    /// 
+    /// I need this because Nintendo had this strange idea that using UInt24 is OK
     /// </summary>
     public struct UInt24
     {
@@ -83,5 +126,20 @@ namespace Hack.io.Util
         /// </summary>
         /// <returns></returns>
         public override string ToString() => Value.ToString();
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <returns></returns>
+        public string ToString(IFormatProvider provider) => Value.ToString(provider);
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <returns></returns>
+        public string ToString(string format) => Value.ToString(format);
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <returns></returns>
+        public string ToString(string format, IFormatProvider provider) => Value.ToString(format, provider);
     }
 }
