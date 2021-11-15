@@ -623,5 +623,22 @@ namespace Hack.io.Util
             size.Width /= scale;
             size.Height /= scale;
         }
+        /// <summary>
+        /// Creates a new ICollection (Such as a <see cref="List{T}"/>) with a specified value for every entry
+        /// </summary>
+        /// <typeparam name="Class"></typeparam>
+        /// <typeparam name="Type"></typeparam>
+        /// <param name="InitValue"></param>
+        /// <param name="Size"></param>
+        /// <returns></returns>
+        public static Class NewICollection<Class, Type>(Type InitValue, int Size) where Class : ICollection<Type>, new()
+        {
+            Class output = new Class();
+            for (int i = 0; i < Size; i++)
+            {
+                output.Add(InitValue);
+            }
+            return output;
+        }
     }
 }
