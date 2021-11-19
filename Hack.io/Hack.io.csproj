@@ -45,8 +45,9 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="DirectoryBase.cs" />
+    <Compile Include="ArchiveBase.cs" />
     <Compile Include="Int24.cs" />
+    <Compile Include="MessageBox.cs" />
     <Compile Include="Util.cs" />
     <Compile Include="FileStreamEx.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
