@@ -81,7 +81,7 @@ namespace Hack.io.RARC
             {
                 DirectoryInfo DI = new DirectoryInfo(FolderPath);
                 Name = DI.Name;
-                CreateFromFolder(FolderPath);
+                CreateFromFolder(FolderPath, Owner);
                 OwnerArchive = Owner;
             }
             internal Directory(RARC Owner, int ID, List<RARCDirEntry> DirectoryNodeList, List<RARCFileEntry> FlatFileList, uint DataBlockStart, Stream RARCFile)
@@ -108,7 +108,51 @@ namespace Hack.io.RARC
             /// </summary>
             /// <returns></returns>
             public override string ToString() => $"{Name} - {Items.Count} Item(s)";
+            /// <summary>
+            /// Create an ArchiveDirectory. You cannot use this function unless this directory is empty
+            /// </summary>
+            /// <param name="FolderPath"></param>
+            /// <param name="OwnerArchive"></param>
+            public new void CreateFromFolder(string FolderPath, Archive OwnerArchive = null)
+            {
+                if (!(OwnerArchive is RARC r))
+                    throw new Exception();
 
+                if (Items.Count > 0)
+                    throw new Exception("Cannot create a directory from a folder if Items exist");
+                string[] Found = System.IO.Directory.GetFiles(FolderPath, "*.*", SearchOption.TopDirectoryOnly);
+                for (int i = 0; i < Found.Length; i++)
+                {
+                    File temp = new File(Found[i]);
+                    Items[temp.Name] = temp;
+                }
+
+                string[] SubDirs = System.IO.Directory.GetDirectories(FolderPath, "*.*", SearchOption.TopDirectoryOnly);
+                for (int i = 0; i < SubDirs.Length; i++)
+                {
+                    Directory temp = new Directory(SubDirs[i], r);
+                    Items[temp.Name] = temp;
+                }
+            }
+            /// <summary>
+            /// 
+            /// </summary>
+            /// <returns></returns>
+            protected override ArchiveDirectory NewDirectory() => new Directory();
+            /// <summary>
+            /// 
+            /// </summary>
+            /// <param name="Owner"></param>
+            /// <param name="parent"></param>
+            /// <returns></returns>
+            protected override ArchiveDirectory NewDirectory(Archive Owner, ArchiveDirectory parent) => new Directory((RARC)Owner, (Directory)parent);
+            /// <summary>
+            /// 
+            /// </summary>
+            /// <param name="filename"></param>
+            /// <param name="Owner"></param>
+            /// <returns></returns>
+            protected override ArchiveDirectory NewDirectory(string filename, Archive Owner) => new Directory(filename, (RARC)Owner);
         }
 
         /// <summary>
@@ -257,6 +301,26 @@ namespace Hack.io.RARC
             if (!KeepFileIDsSynced && value is File file && file.ID == -1 && !ItemExists(Path))
                 file.ID = GetNextFreeID();
         }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <returns></returns>
+        protected override ArchiveDirectory NewDirectory() => new Directory();
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="Owner"></param>
+        /// <param name="parent"></param>
+        /// <returns></returns>
+        protected override ArchiveDirectory NewDirectory(Archive Owner, ArchiveDirectory parent) => new Directory((RARC)Owner, (Directory)parent);
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="filename"></param>
+        /// <param name="Owner"></param>
+        /// <returns></returns>
+        protected override ArchiveDirectory NewDirectory(string filename, Archive Owner) => new Directory(filename, (RARC)Owner);
         /// <summary>
         /// 
         /// </summary>

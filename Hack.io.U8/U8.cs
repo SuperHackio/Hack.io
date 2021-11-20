@@ -93,6 +93,7 @@ namespace Hack.io.U8
                     U8File.Position = StringTableLocation + entries[i].NameOffset;
                     dir.Name = U8File.ReadString();
                     FlatItems.Add(dir);
+                    dir.OwnerArchive = this;
                 }
                 else
                 {
@@ -107,6 +108,7 @@ namespace Hack.io.U8
             }
             entries.RemoveAt(entries.Count - 1);
             Stack<ArchiveDirectory> DirectoryStack = new Stack<ArchiveDirectory>();
+            DirectoryStack.Push((ArchiveDirectory)FlatItems[0]);
             for (int i = 1; i < entries.Count; i++)
             {
                 if (entries[i].IsDirectory)

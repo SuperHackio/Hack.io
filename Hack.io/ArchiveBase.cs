@@ -92,11 +92,13 @@ namespace Hack.io.Util
                     throw new Exception($"Invalid object type of {value.GetType().ToString()}");
 
                 if (Root is null)
-                    Root = new ArchiveDirectory(this, null) { Name = Path.Split('/')[0] };
+                {
+                    Root = NewDirectory(this, null);
+                    Root.Name = Path.Split('/')[0];
+                }
 
                 if (Path.StartsWith(Root.Name + "/"))
                     Path = Path.Substring(Root.Name.Length + 1);
-
 
                 OnItemSet(value, Path);
                 Root[Path] = value;
@@ -164,13 +166,13 @@ namespace Hack.io.Util
         /// Create an Archive from a Folder
         /// </summary>
         /// <param name="Folderpath">Folder to make an archive from</param>
-        public void Import(string Folderpath) => Root = new ArchiveDirectory(Folderpath, this);
+        public void Import(string Folderpath) => Root = NewDirectory(Folderpath, this);
         /// <summary>
         /// Dump the contents of this archive to a folder
         /// </summary>
         /// <param name="FolderPath">The Path to save to. Should be a folder</param>
         /// <param name="Overwrite">If there are contents already at the chosen location, delete them?</param>
-        public void Export(string FolderPath, bool Overwrite = false)
+        public virtual void Export(string FolderPath, bool Overwrite = false)
         {
             FolderPath = Path.Combine(FolderPath, Root.Name);
             if (Directory.Exists(FolderPath))
@@ -188,6 +190,26 @@ namespace Hack.io.Util
 
             Root.Export(FolderPath);
         }
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <returns></returns>
+        protected virtual ArchiveDirectory NewDirectory() => new ArchiveDirectory();
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="Owner"></param>
+        /// <param name="parent"></param>
+        /// <returns></returns>
+        protected virtual ArchiveDirectory NewDirectory(Archive Owner, ArchiveDirectory parent) => new ArchiveDirectory(Owner, parent);
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="filename"></param>
+        /// <param name="Owner"></param>
+        /// <returns></returns>
+        protected virtual ArchiveDirectory NewDirectory(string filename, Archive Owner) => new ArchiveDirectory(filename, Owner);
+
     }
 
     /// <summary>
@@ -210,7 +232,7 @@ namespace Hack.io.Util
         /// <summary>
         /// The Archive that owns this directory
         /// </summary>
-        protected Archive OwnerArchive;
+        public Archive OwnerArchive;
 
         /// <summary>
         /// Create a new Archive Directory
@@ -285,7 +307,9 @@ namespace Hack.io.Util
                     }
                     else
                     {
-                        Items.Add(PathSplit[0], new ArchiveDirectory(OwnerArchive, this) { Name = PathSplit[0] });
+                        ArchiveDirectory dir = NewDirectory(OwnerArchive, this);
+                        dir.Name = PathSplit[0];
+                        Items.Add(PathSplit[0], dir);
                         ((ArchiveDirectory)Items[PathSplit[0]])[Path.Substring(PathSplit[0].Length + 1)] = value;
                     }
                 }
@@ -497,10 +521,29 @@ namespace Hack.io.Util
             string[] SubDirs = Directory.GetDirectories(FolderPath, "*.*", SearchOption.TopDirectoryOnly);
             for (int i = 0; i < SubDirs.Length; i++)
             {
-                ArchiveDirectory temp = new ArchiveDirectory(SubDirs[i], OwnerArchive);
+                ArchiveDirectory temp = NewDirectory(SubDirs[i], OwnerArchive);
                 Items[temp.Name] = temp;
             }
         }
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <returns></returns>
+        protected virtual ArchiveDirectory NewDirectory() => new ArchiveDirectory();
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="Owner"></param>
+        /// <param name="parent"></param>
+        /// <returns></returns>
+        protected virtual ArchiveDirectory NewDirectory(Archive Owner, ArchiveDirectory parent) => new ArchiveDirectory(Owner, parent);
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="filename"></param>
+        /// <param name="Owner"></param>
+        /// <returns></returns>
+        protected virtual ArchiveDirectory NewDirectory(string filename, Archive Owner) => new ArchiveDirectory(filename, Owner);
     }
 
     /// <summary>
