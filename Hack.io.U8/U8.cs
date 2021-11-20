@@ -144,7 +144,7 @@ namespace Hack.io.U8
             List<byte> StringBytes = GetStringTableBytes(FlatItems, ref StringOffsets);
 
             uint DataOffset = (uint)(0x20 + (FlatItems.Count * 0x0C) + StringBytes.Count);
-            DataOffset += 0x40 - (DataOffset % 0x40);
+            DataOffset += 0x20 - (DataOffset % 0x20);
             //while (DataOffset % 16 != 0)
             //    DataOffset++;
             Dictionary<ArchiveFile, uint> DataOffsets = new Dictionary<ArchiveFile, uint>();
@@ -207,7 +207,7 @@ namespace Hack.io.U8
 
             //Write the strings
             U8File.Write(StringBytes.ToArray(), 0, StringBytes.Count);
-            U8File.PadTo(16, 0);
+            U8File.PadTo(0x20, 0);
 
             //Write the File Data
             U8File.Write(DataBytes.ToArray(), 0, DataBytes.Count);
