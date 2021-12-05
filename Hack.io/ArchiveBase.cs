@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 namespace Hack.io.Util
@@ -117,12 +118,13 @@ namespace Hack.io.Util
         /// Checks to see if an Item Exists based on a Path
         /// </summary>
         /// <param name="Path">The path to take</param>
+        /// <param name="IgnoreCase">Ignore casing of the file</param>
         /// <returns>false if the Item isn't found</returns>
-        public bool ItemExists(string Path)
+        public bool ItemExists(string Path, bool IgnoreCase = false)
         {
             if (Path.StartsWith(Root.Name + "/"))
                 Path = Path.Substring(Root.Name.Length + 1);
-            return Root.ItemExists(Path);
+            return Root.ItemExists(Path, IgnoreCase);
         }
         /// <summary>
         /// This will return the absolute path of an item if it exists in some way. Useful if you don't know the casing of the filename inside the file. Returns null if nothing is found.
@@ -160,6 +162,14 @@ namespace Hack.io.Util
             this[OriginalPath] = null;
             this[NewPath] = dest;
         }
+        /// <summary>
+        /// Search the archive for files that match the regex
+        /// </summary>
+        /// <param name="Pattern">The regex pattern to use</param>
+        /// <param name="RootLevelOnly">If true, all subdirectories will be skipped</param>
+        /// <param name="IgnoreCase">Ignore the filename casing</param>
+        /// <returns></returns>
+        public List<string> FindItems(string Pattern, bool RootLevelOnly = false, bool IgnoreCase = false) => Root.FindItems(Pattern, RootLevelOnly, IgnoreCase);
         #endregion
 
         /// <summary>
@@ -304,6 +314,11 @@ namespace Hack.io.Util
                             dir.OwnerArchive = OwnerArchive;
                         ((dynamic)value).Parent = this;
                         Items.Add(PathSplit[0], value);
+
+                        if (value is ArchiveFile f && string.IsNullOrEmpty(f.Name))
+                        {
+                            f.Name = PathSplit[0]; //If the file has no name, assign it the name defined in the path
+                        }
                     }
                     else
                     {
@@ -328,6 +343,11 @@ namespace Hack.io.Util
                         {
                             ((dynamic)value).Parent = this;
                             Items[PathSplit[0]] = value;
+
+                            if (value is ArchiveFile f && string.IsNullOrEmpty(f.Name))
+                            {
+                                f.Name = PathSplit[0]; //If the file has no name, assign it the name defined in the path
+                            }
                         }
                     }
                     else if (Items[PathSplit[0]] is ArchiveDirectory dir)
@@ -339,23 +359,34 @@ namespace Hack.io.Util
         /// Checks to see if an Item Exists based on a Path
         /// </summary>
         /// <param name="Path">The path to take</param>
+        /// <param name="IgnoreCase">Ignore casing</param>
         /// <returns>false if the Item isn't found</returns>
-        public bool ItemExists(string Path)
+        public bool ItemExists(string Path, bool IgnoreCase = false)
         {
             string[] PathSplit = Path.Split('/');
             if (PathSplit.Length > 1 && ItemKeyExists(PathSplit[0]) && Items[PathSplit[0]] is ArchiveDirectory dir)
-                return dir.ItemExists(Path.Substring(PathSplit[0].Length + 1));
+                return dir.ItemExists(Path.Substring(PathSplit[0].Length + 1), IgnoreCase);
             else if (PathSplit.Length > 1)
                 return false;
             else
-                return ItemKeyExists(PathSplit[0]);
+                return ItemKeyExists(PathSplit[0], IgnoreCase);
         }
         /// <summary>
         /// Checks to see if an item exists in this directory only
         /// </summary>
         /// <param name="ItemName">The name of the Item to look for (Case Sensitive)</param>
+        /// <param name="IgnoreCase">Ignore casing</param>
         /// <returns>false if the Item doesn't exist</returns>
-        public bool ItemKeyExists(string ItemName) => Items.ContainsKey(ItemName);
+        public bool ItemKeyExists(string ItemName, bool IgnoreCase = false)
+        {
+            if (!IgnoreCase)
+                return Items.ContainsKey(ItemName);
+
+            foreach (KeyValuePair<string, object> item in Items)
+                if (item.Key.Equals(ItemName, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            return false;
+        }
         /// <summary>
         /// 
         /// </summary>
@@ -495,6 +526,41 @@ namespace Hack.io.Util
             Items.Remove(OldName);
             activeitem.Name = NewName;
             Items.Add(NewName, activeitem);
+        }
+        /// <summary>
+        /// Search the directory for files that match the regex
+        /// </summary>
+        /// <param name="Pattern">The regex pattern to use</param>
+        /// <param name="TopLevelOnly">If true, all subdirectories will be skipped</param>
+        /// <param name="IgnoreCase">Ignore the filename casing</param>
+        /// <returns>List of Item Keys</returns>
+        public List<string> FindItems(string Pattern, bool TopLevelOnly = false, bool IgnoreCase = false)
+        {
+            List<string> results = new List<string>();
+            StringComparison sc = IgnoreCase ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+            RegexOptions ro = (IgnoreCase ? RegexOptions.IgnoreCase : RegexOptions.None) | RegexOptions.Singleline;
+            foreach (KeyValuePair<string, object> item in Items)
+            {
+                if (item.Value is ArchiveFile File)
+                {
+                    //Performance Enhancement
+                    if ((Pattern.StartsWith("*") && File.Name.EndsWith(Pattern.Substring(1), sc)) || (Pattern.EndsWith("*") && File.Name.StartsWith(Pattern.Substring(Pattern.Length - 1), sc)))
+                    {
+                        goto Success;
+                    }
+                    string regexPattern = string.Concat("^", Regex.Escape(Pattern).Replace("\\*", ".*"), "$");
+                    if (Regex.IsMatch(File.Name, regexPattern, ro))
+                    {
+                        goto Success;
+                    }
+                    continue;
+                    Success:
+                        results.Add(File.FullPath);
+                }
+                else if (item.Value is ArchiveDirectory Directory && !TopLevelOnly)
+                    results.AddRange(Directory.FindItems(Pattern, IgnoreCase: IgnoreCase));
+            }
+            return results;
         }
 
         /// <summary>
