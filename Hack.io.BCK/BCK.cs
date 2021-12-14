@@ -331,9 +331,9 @@ namespace Hack.io.BCK
             AddPadding(BCKFile, 32);
 
             BCKFile.Position = 0x08;
-            BCKFile.WriteReverse(BitConverter.GetBytes(BCKFile.Length), 0, 4);
+            BCKFile.WriteReverse(BitConverter.GetBytes((uint)BCKFile.Length), 0, 4);
             BCKFile.Position = 0x24;
-            BCKFile.WriteReverse(BitConverter.GetBytes(BCKFile.Length - Ank1Start), 0, 4);
+            BCKFile.WriteReverse(BitConverter.GetBytes((uint)(BCKFile.Length - Ank1Start)), 0, 4);
             BCKFile.Position = 0x34;
             BCKFile.WriteReverse(BitConverter.GetBytes(AnimTableOffset        - Ank1Start), 0, 4);
             BCKFile.WriteReverse(BitConverter.GetBytes(ScaleTableOffset       - Ank1Start), 0, 4);
