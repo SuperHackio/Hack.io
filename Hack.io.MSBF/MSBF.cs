@@ -33,6 +33,7 @@ namespace Hack.io.MSBF
             FileStream MSBFFile = new FileStream(file, FileMode.Open);
             Read(MSBFFile);
             MSBFFile.Close();
+            FileName = file;
         }
         public MSBF(Stream MSBFFile) => Read(MSBFFile);
 
@@ -41,6 +42,7 @@ namespace Hack.io.MSBF
             FileStream MSBFFile = new FileStream(file, FileMode.Create);
             Write(MSBFFile);
             MSBFFile.Close();
+            FileName = file;
         }
         public MemoryStream Save()
         {
