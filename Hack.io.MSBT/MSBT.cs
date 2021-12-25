@@ -11,6 +11,11 @@ namespace Hack.io.MSBT
 {
     public class MSBT
     {
+        /// <summary>
+        /// Filename of this MSBT file.
+        /// </summary>
+        public string FileName { get; set; } = null;
+
         EncodingByte TextEncoding { get; set; }
         /// <summary>
         /// Should always return Encoding.BigEndianUnicode
@@ -44,6 +49,12 @@ namespace Hack.io.MSBT
             FileStream FS = new FileStream(file, FileMode.Create);
             Write(FS);
             FS.Close();
+        }
+        public MemoryStream Save()
+        {
+            MemoryStream ms = new MemoryStream();
+            Write(ms);
+            return ms;
         }
         public List<Label> GetSortedLabels
         {
@@ -157,13 +168,16 @@ namespace Hack.io.MSBT
                     FS.Position++;
             }
         }
+
         private void Write(Stream FS)
         {
+            //Shoutouts to Penguin (the Japanese SMG2 hacker) who properly figured out how the LBL1 section is supposed to be written
+            
             //Impressive one-liner is impressive.....I think...
             SortedDictionary<string, Label> SortedLabels = new SortedDictionary<string, Label>(Messages.ToDictionary(prop => prop.Name, prop => prop));
             //Item1 = NumberOfLabels
             //Item2 = Offset
-            List<Tuple<uint, uint>> Groups = new List<Tuple<uint, uint>>();
+            List<(uint Hash, uint Offset)> Groups = new List<(uint, uint)>();
             List<byte> WrittenLabels = new List<byte>();
 
             FS.WriteString(Magic);
@@ -181,18 +195,53 @@ namespace Hack.io.MSBT
             FS.WriteString("LBL1");
             FS.Write(new byte[4] { 0xDD, 0xDD, 0xDD, 0xDD }, 0, 4);
             FS.Write(new byte[8], 0, 8);
-            FS.WriteReverse(BitConverter.GetBytes(Messages.Count), 0, 4);
+            //Always 101 for some reason
+            int GroupCount = 101;
+            FS.WriteReverse(BitConverter.GetBytes((uint)GroupCount), 0, 4);
 
-            MakeGroups((int)(LBL1Start+0x10), ref Groups, ref WrittenLabels);
+            MakeGroups((uint)GroupCount, ref Groups, ref WrittenLabels);
+            Groups = Groups.OrderBy(A => A.Hash).ToList();
+            long LastPosition = FS.Position + (8 * GroupCount); //Keep this position for later
+
+            int ActualDataCount = 0;
             for (int i = 0; i < Groups.Count; i++)
             {
-                FS.WriteReverse(BitConverter.GetBytes(Groups[i].Item1), 0, 4);
-                FS.WriteReverse(BitConverter.GetBytes(Groups[i].Item2), 0, 4);
+                var HashCount = Groups.Where(a => a.Hash.Equals(Groups[i].Hash)).Count();
+                uint hashdiff = Groups[i].Hash;
+                if (i == 0)
+                    goto FirstTimeSkip;
+
+                hashdiff = Groups[i].Hash - Groups[i - 1].Hash;
+                if ((hashdiff == 0) && ((Groups.Count - 1) != i) && (Groups[i + 1].Hash - Groups[i].Hash == 0))
+                    continue;
+                
+                FirstTimeSkip:
+                int LoopCountChange = 0;
+                int BranchDataChenge = -1;
+                if (i == 0)
+                {
+                    LoopCountChange = 1;
+                    BranchDataChenge = 0;
+                }
+                for (int j = 0; j < (hashdiff + LoopCountChange); j++)
+                {
+                    FS.WriteReverse((j == hashdiff + BranchDataChenge) ? BitConverter.GetBytes(HashCount) : new byte[4], 0, 4);
+                    FS.WriteReverse(BitConverter.GetBytes(Groups[i].Offset), 0, 4);
+                    ActualDataCount++;
+                }
             }
+            //Fill out the rest of the empty data
+            if (ActualDataCount < GroupCount)
+                for (int i = 0; i < GroupCount - ActualDataCount; i++)
+                {
+                    FS.WriteReverse(new byte[4], 0, 4);
+                    FS.WriteReverse(BitConverter.GetBytes((uint)(LastPosition - 0x30)), 0, 4);
+                }
+
             FS.Write(WrittenLabels.ToArray(), 0, WrittenLabels.Count);
             long LBL1End = FS.Position;
             FS.PadTo(16, 0xAB);
-
+            
             long ATR1Start = FS.Position;
             FS.WriteString("ATR1");
             FS.Write(new byte[4] { 0xDD, 0xDD, 0xDD, 0xDD }, 0, 4);
@@ -247,31 +296,45 @@ namespace Hack.io.MSBT
             FS.Position = TXT2Start + 0x04;
             FS.WriteReverse(BitConverter.GetBytes((int)(TXT2End - (TXT2Start + 0x10))), 0, 4);
         }
-        private void MakeGroups(int LabelsStart, ref List<Tuple<uint, uint>> Groups, ref List<byte> LabelData)
+        private void MakeGroups(uint GroupCount, ref List<(uint, uint)> Groups, ref List<byte> LabelData)
         {
-            uint Offset = (uint)(LabelsStart + (8 * Messages.Count));
+            uint Offset = 4 + (8 * GroupCount);
             for (int i = 0; i < Messages.Count; i++)
             {
-                Groups.Add(new Tuple<uint, uint>(1, Offset));
-                Offset += (uint)(0x01 + Messages[i].Name.Length + 1 + 4);
+                Groups.Add((LabelChecksum(Messages[i].Name, GroupCount), Offset));
+                Offset += (uint)(Messages[i].Name.Length + 1 + 4);
                 LabelData.Add((byte)Messages[i].Name.Length);
                 LabelData.AddRange(Encoding.UTF8.GetBytes(Messages[i].Name));
-                LabelData.AddRange(BitConverter.GetBytes(i).Reverse());
+                LabelData.AddRange(BitConverter.GetBytes(Messages[i].Index).Reverse());
             }
         }
         private uint LabelChecksum(string label, uint GroupCount)
         {
-            uint group = 0;
-
-            for (int i = 0; i < label.Length; i++)
+            uint hash = 0;
+            foreach (char c in label)
             {
-                group *= 0x492;
-                group += label[i];
-                group &= 0xFFFFFFFF;
+                hash *= 0x492;
+                hash += c;
             }
-
-            return group % GroupCount;
+            return (hash & 0xFFFFFFFF) % GroupCount;
         }
+
+        //=====================================================================
+
+        /// <summary>
+        /// Cast a MSBT to a ArchiveFile
+        /// </summary>
+        /// <param name="x"></param>
+        public static implicit operator ArchiveFile(MSBT x) => new ArchiveFile(x.FileName, x.Save());
+
+        /// <summary>
+        /// Cast a ArchiveFile to a MSBT
+        /// </summary>
+        /// <param name="x"></param>
+        public static implicit operator MSBT(ArchiveFile x) => new MSBT((MemoryStream)x) { FileName = x.Name };
+
+        //=====================================================================
+
         public class Label
         {
             public uint Length;
@@ -292,9 +355,9 @@ namespace Hack.io.MSBT
             public Trigger Trigger { get; set; } = Trigger.TALK;
             public MessageBoxType MessageBox { get; set; } = MessageBoxType.BUBBLE;
             public ushort Unknown3 { get; set; } = 0;
-            public sbyte CameraID { get; set; } = -1;
+            public sbyte EventCameraID { get; set; } = -1;
             public sbyte MessageAreaID { get; set; } = -1;
-            public string Unknown6 { get; set; }
+            public string SpecialText { get; set; }
 
             public Attribute(Stream FS, long Start)
             {
@@ -303,26 +366,26 @@ namespace Hack.io.MSBT
                 Trigger = (Trigger)FS.ReadByte();
                 MessageBox = (MessageBoxType)FS.ReadByte();
                 Unknown3 = BitConverter.ToUInt16(FS.ReadReverse(0, 2), 0);
-                CameraID = (sbyte)FS.ReadByte();
+                EventCameraID = (sbyte)FS.ReadByte();
                 MessageAreaID = (sbyte)FS.ReadByte();
                 uint StringOffset = BitConverter.ToUInt32(FS.ReadReverse(0, 4), 0);
                 long PausePosition = FS.Position;
-                FS.Position = Start + StringOffset;
-                Unknown6 = FS.ReadString(Encoding.BigEndianUnicode);
+                FS.Position = StringOffset;
+                SpecialText = FS.ReadString(Encoding.BigEndianUnicode);
                 FS.Position = PausePosition;
             }
             internal byte[] Write(Encoding Enc, ref Dictionary<string, uint> AttributeStringOffsets, ref int StringOffset)
             {
                 List<byte> Data = new List<byte>() { SoundID, CameraSetting, (byte)Trigger, (byte)MessageBox };
                 Data.AddRange(BitConverter.GetBytes(Unknown3).Reverse());
-                Data.Add((byte)CameraID);
+                Data.Add((byte)EventCameraID);
                 Data.Add((byte)MessageAreaID);
-                if (!AttributeStringOffsets.ContainsKey(Unknown6))
+                if (!AttributeStringOffsets.ContainsKey(SpecialText))
                 {
-                    AttributeStringOffsets.Add(Unknown6, (uint)StringOffset);
-                    StringOffset += Enc.GetByteCount(Unknown6);
+                    AttributeStringOffsets.Add(SpecialText, (uint)StringOffset);
+                    StringOffset += Enc.GetByteCount(SpecialText);
                 }
-                Data.AddRange(BitConverter.GetBytes(AttributeStringOffsets[Unknown6]).Reverse());
+                Data.AddRange(BitConverter.GetBytes(AttributeStringOffsets[SpecialText]).Reverse());
                 return Data.ToArray();
             }
 
@@ -592,10 +655,11 @@ namespace Hack.io.MSBT
                 public override byte[] Write(Encoding Enc)
                 {
                     List<byte> Data = new List<byte>();
-                    int TotalSize = (SoundID.Length + 1) * Enc.GetStride();
-                    Data.AddRange(BitConverter.GetBytes(TotalSize).Reverse());
+                    byte[] stringdata = Enc.GetBytes(SoundID);
+                    Data.AddRange(new byte[2]);
+                    Data.AddRange(BitConverter.GetBytes((ushort)(stringdata.Length + Enc.GetStride())).Reverse());
                     Data.AddRange(BitConverter.GetBytes((ushort)SoundID.Length).Reverse());
-                    Data.AddRange(Enc.GetBytes(SoundID));
+                    Data.AddRange(stringdata);
                     return Data.ToArray();
                 }
 

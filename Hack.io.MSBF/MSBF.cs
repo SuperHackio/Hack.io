@@ -5,29 +5,49 @@ using Hack.io.MSBT;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Hack.io.Util;
 
 namespace Hack.io.MSBF
 {
     public class MSBF
     {
+        const string Magic = "MsgFlwBn";
+        /// <summary>
+        /// Filename of this MSBF file.
+        /// </summary>
+        public string FileName { get; set; } = null;
+
         public MSBT.MSBT TextFile;
         public List<Node> Nodes = new List<Node>();
-        public List<ushort> NodePairs = new List<ushort>();
-
-
-
+        /// <summary>
+        /// Each condition node will index into this list to find their jumps
+        /// nodes index in pairs of 2, so 0x00, 0x02, 0x04, etc.
+        /// </summary>
+        public List<ushort> ConditionJumpNodes = new List<ushort>();
+        
         /// <summary>
         /// File Identifier
         /// </summary>
-        private readonly string Magic = "MsgFlwBn";
         public MSBF(string file)
         {
-            FileStream FS = new FileStream(file, FileMode.Open);
-            Read(FS);
-            FS.Close();
+            FileStream MSBFFile = new FileStream(file, FileMode.Open);
+            Read(MSBFFile);
+            MSBFFile.Close();
         }
         public MSBF(Stream MSBFFile) => Read(MSBFFile);
 
+        public void Save(string file)
+        {
+            FileStream MSBFFile = new FileStream(file, FileMode.Create);
+            Write(MSBFFile);
+            MSBFFile.Close();
+        }
+        public MemoryStream Save()
+        {
+            MemoryStream ms = new MemoryStream();
+            Write(ms);
+            return ms;
+        }
 
         private void Read(Stream MSBFFile)
         {
@@ -36,6 +56,7 @@ namespace Hack.io.MSBF
 
             MSBFFile.Position += 0x18;
 
+            List<(string MSBTTag, uint NodeIndex)> FlowMSBTHookNames = new List<(string MSBTTag, uint NodeIndex)>();
             while (MSBFFile.Position < MSBFFile.Length)
             {
                 string CurrentSectionMagic = MSBFFile.ReadString(4);
@@ -46,12 +67,118 @@ namespace Hack.io.MSBF
                         ReadFLW2(MSBFFile);
                         break;
                     case "FEN1":
-                        ReadFEN1(MSBFFile);
+                        ReadFEN1(MSBFFile, ref FlowMSBTHookNames);
                         break;
                     default:
                         throw new Exception($"{CurrentSectionMagic} section found, but this is not supported.");
                 }
             }
+
+            for (int i = 0; i < FlowMSBTHookNames.Count; i++)
+            {
+                if (Nodes[(int)FlowMSBTHookNames[i].NodeIndex] is EntryNode EN)
+                {
+                    EN.MSBTEntryTag = FlowMSBTHookNames[i].MSBTTag;
+                }
+            }
+        }
+
+        private void Write(Stream MSBFFile)
+        {
+            MSBFFile.WriteString(Magic);
+            MSBFFile.Write(new byte[2] { 0xFE, 0xFF }, 0, 2);
+            MSBFFile.Write(new byte[4] { 0x00, 0x00, 0x00, 0x03 }, 0, 4);
+            MSBFFile.Write(new byte[2] { 000, 0x02 }, 0, 2); //2 sections
+            MSBFFile.Write(new byte[2], 0, 2); //Padding
+            MSBFFile.Write(new byte[4] { 0xDD, 0xDD, 0xDD, 0xDD }, 0, 4); //Size placeholder
+            MSBFFile.Write(new byte[10], 0, 10); //More padding
+
+            //FLW2 section
+            long FLW2Start = MSBFFile.Position;
+            MSBFFile.WriteString("FLW2");
+            MSBFFile.Write(new byte[4] { 0xDD, 0xDD, 0xDD, 0xDD }, 0, 4); //Size placeholder
+            MSBFFile.Write(new byte[8], 0, 8); //padding
+            MSBFFile.WriteReverse(BitConverter.GetBytes((ushort)Nodes.Count), 0, 2);
+            MSBFFile.WriteReverse(BitConverter.GetBytes((ushort)ConditionJumpNodes.Count), 0, 2); //usually (ConditionNodeCount * 2) * 4
+            MSBFFile.Write(new byte[4], 0, 4); //padding to the 8th most likely
+
+            //TODO: Make everything reference based
+            for (int i = 0; i < Nodes.Count; i++)
+            {
+                Nodes[i].Write(MSBFFile);
+            }
+            for (int i = 0; i < ConditionJumpNodes.Count; i++)
+            {
+                MSBFFile.WriteReverse(BitConverter.GetBytes(ConditionJumpNodes[i]), 0, 2);
+            }
+            long FLW2End = MSBFFile.Position;
+            MSBFFile.PadTo(16, 0xAB);
+
+            //Fen1 time
+            //Flow Entry section
+            long FEN1Start = MSBFFile.Position;
+            MSBFFile.WriteString("FEN1");
+            MSBFFile.Write(new byte[4] { 0xDD, 0xDD, 0xDD, 0xDD }, 0, 4); //Size placeholder
+            MSBFFile.Write(new byte[8], 0, 8); //padding
+
+            //Always 59 for some reason
+            uint GroupCount = 59;
+            MSBFFile.WriteReverse(BitConverter.GetBytes(GroupCount), 0, 4);
+
+            //Lets collect all the unique entries
+            //No two initilizer nodes can have the same MSBTTag
+            List<(uint Hash, uint Offset)> Groups = new List<(uint, uint)>();
+            List<byte> WrittenLabels = new List<byte>();
+            MakeGroups(GroupCount, ref Groups, ref WrittenLabels, out uint FinalOffset);
+
+            //Groups = Groups.OrderBy(A => A.Hash).ToList();
+
+            int ActualDataCount = 0;
+            for (int i = 0; i < Groups.Count; i++)
+            {
+                var HashCount = Groups.Where(a => a.Hash.Equals(Groups[i].Hash)).Count();
+                uint hashdiff = Groups[i].Hash;
+                if (i == 0)
+                    goto FirstTimeSkip;
+
+                hashdiff = Groups[i].Hash - Groups[i - 1].Hash;
+                if ((hashdiff == 0) && ((Groups.Count - 1) != i) && (Groups[i + 1].Hash - Groups[i].Hash == 0))
+                    continue;
+
+                FirstTimeSkip:
+                int LoopCountChange = 0;
+                int BranchDataChenge = -1;
+                if (i == 0)
+                {
+                    LoopCountChange = 1;
+                    BranchDataChenge = 0;
+                }
+                for (int j = 0; j < (hashdiff + LoopCountChange); j++)
+                {
+                    MSBFFile.WriteReverse((j == hashdiff + BranchDataChenge) ? BitConverter.GetBytes(HashCount) : new byte[4], 0, 4);
+                    MSBFFile.WriteReverse(BitConverter.GetBytes(Groups[i].Offset), 0, 4);
+                    ActualDataCount++;
+                }
+            }
+            //Fill out the rest of the empty data
+            if (ActualDataCount < GroupCount)
+                for (int i = 0; i < GroupCount - ActualDataCount; i++)
+                {
+                    MSBFFile.WriteReverse(new byte[4], 0, 4);
+                    MSBFFile.WriteReverse(BitConverter.GetBytes(FinalOffset), 0, 4);
+                }
+
+            MSBFFile.Write(WrittenLabels.ToArray(), 0, WrittenLabels.Count);
+            long FEN1End = MSBFFile.Position;
+            MSBFFile.PadTo(16, 0xAB);
+
+            //DON'T FORGET TO WRITE THE SECTION SIZES!!!
+            MSBFFile.Position = 0x12;
+            MSBFFile.WriteReverse(BitConverter.GetBytes((int)MSBFFile.Length), 0, 4);
+            MSBFFile.Position = FLW2Start + 0x04;
+            MSBFFile.WriteReverse(BitConverter.GetBytes((int)(FLW2End - (FLW2Start + 0x10))), 0, 4);
+            MSBFFile.Position = FEN1Start + 0x04;
+            MSBFFile.WriteReverse(BitConverter.GetBytes((int)(FEN1End - (FEN1Start + 0x10))), 0, 4);
         }
 
         private void ReadFLW2(Stream MSBFFile)
@@ -92,72 +219,91 @@ namespace Hack.io.MSBF
 
             for (int i = 0; i < NodePairCount; i++)
             {
-                NodePairs.Add(BitConverter.ToUInt16(MSBFFile.ReadReverse(0, 2), 0));
+                ConditionJumpNodes.Add(BitConverter.ToUInt16(MSBFFile.ReadReverse(0, 2), 0));
             }
 
             while (MSBFFile.Position % 0x10 != 0)
                 MSBFFile.Position++;
         }
 
-        public struct TableEntry
+        /// <summary>
+        /// FEN1 = Flow Entry (most likely0
+        /// </summary>
+        /// <param name="MSBFFile"></param>
+        private void ReadFEN1(Stream MSBFFile, ref List<(string MSBTTag, uint NodeIndex)> mEntries)
         {
-            public uint Count;
-            public List<TablePair> Pairs;
-        }
-
-        public struct TablePair
-        {
-            public string Label;
-            public uint FlowOffset;
-        }
-        List<TableEntry> mEntries;
-        private void ReadFEN1(Stream MSBFFile)
-        {
-            //mTable = new Dictionary<string, uint>();
-            mEntries = new List<TableEntry>();
-
+            List<(uint Hash, uint OfMSBFFileet)> Groups = new List<(uint Hash, uint OfMSBFFileet)>();
             int size = BitConverter.ToInt32(MSBFFile.ReadReverse(0, 4), 0);
             MSBFFile.Position += 0x08;
-            long loc = MSBFFile.Position;
-            uint count = BitConverter.ToUInt32(MSBFFile.ReadReverse(0, 4), 0);
-
-            for (int i = 0; i < count; i++)
+            long LabelStart = MSBFFile.Position;
+            uint GroupCount = BitConverter.ToUInt32(MSBFFile.ReadReverse(0, 4), 0);
+            for (int y = 0; y < GroupCount; y++)
             {
-                TableEntry e = new TableEntry();
-                e.Count = BitConverter.ToUInt32(MSBFFile.ReadReverse(0, 4), 0);
-
-                int offs = BitConverter.ToInt32(MSBFFile.ReadReverse(0, 4), 0);
-
-                e.Pairs = new List<TablePair>();
-
-                long pos = MSBFFile.Position;
-                MSBFFile.Position = loc + offs;
-
-                for (int j = 0; j < e.Count; j++)
-                {
-                    TablePair p = new TablePair();
-                    p.Label = MSBFFile.ReadString(MSBFFile.ReadByte());
-                    p.FlowOffset = BitConverter.ToUInt32(MSBFFile.ReadReverse(0, 4), 0);
-
-                    e.Pairs.Add(p);
-                }
-
-                MSBFFile.Position = pos;
-
-                /*if (e.mIsValid == 1)
-                {
-                    string str = file.ReadStringAt(loc + e.mPtr);
-                    uint val = file.ReadUInt32At(loc + e.mPtr + str.Length + 1);
-                    mTable.Add(str, val);
-                }*/
-
-                mEntries.Add(e);
+                Groups.Add((BitConverter.ToUInt32(MSBFFile.ReadReverse(0, 4), 0), BitConverter.ToUInt32(MSBFFile.ReadReverse(0, 4), 0)));
             }
 
-            MSBFFile.Position = loc + size;
+            foreach ((uint, uint) grp in Groups)
+            {
+                MSBFFile.Position = LabelStart + grp.Item2;
+                Console.WriteLine("Group ID: " + (uint)Groups.IndexOf(grp));
+                for (int z = 0; z < grp.Item1; z++)
+                {
+                    uint length = Convert.ToUInt32(MSBFFile.ReadByte());
+                    string Name = MSBFFile.ReadString((int)length);
+                    uint Index = BitConverter.ToUInt32(MSBFFile.ReadReverse(0, 4), 0);
+                    uint Checksum = (uint)Groups.IndexOf(grp);
+
+                    mEntries.Add((Name, Index));
+
+                    Console.WriteLine("Label: " + Name);
+                }
+                Console.WriteLine();
+            }
+
+            MSBFFile.Position = LabelStart + size;
 
             while (MSBFFile.Position % 0x10 != 0)
                 MSBFFile.Position++;
+        }
+
+        private void MakeGroups(uint GroupCount, ref List<(uint, uint)> Groups, ref List<byte> LabelData, out uint FinalOffset)
+        {
+            uint Offset = 4 + (8 * GroupCount);
+
+            List<(uint Hash, EntryNode Node)> SortingGroups = new List<(uint Hash, EntryNode Node)>();
+            for (int i = 0; i < Nodes.Count; i++)
+            {
+                if (Nodes[i] is EntryNode EN)
+                {
+                    SortingGroups.Add((LabelChecksum(EN.MSBTEntryTag, GroupCount), EN));
+                }
+            }
+            SortingGroups = SortingGroups.OrderBy(EN => EN.Hash).ToList();
+            for (int i = 0; i < SortingGroups.Count; i++)
+            {
+                Groups.Add((SortingGroups[i].Hash, Offset));
+                Offset += (uint)(SortingGroups[i].Node.MSBTEntryTag.Length + 1 + 4);
+                LabelData.Add((byte)SortingGroups[i].Node.MSBTEntryTag.Length);
+                LabelData.AddRange(Encoding.UTF8.GetBytes(SortingGroups[i].Node.MSBTEntryTag));
+                LabelData.AddRange(BitConverter.GetBytes(Nodes.IndexOf(SortingGroups[i].Node)).Reverse());
+            }
+            FinalOffset = Offset;
+        }
+        /// <summary>
+        /// Same as MSBT
+        /// </summary>
+        /// <param name="label"></param>
+        /// <param name="GroupCount"></param>
+        /// <returns></returns>
+        private uint LabelChecksum(string label, uint GroupCount)
+        {
+            uint hash = 0;
+            foreach (char c in label)
+            {
+                hash *= 0x492;
+                hash += c;
+            }
+            return (hash & 0xFFFFFFFF) % GroupCount;
         }
 
         public abstract class Node
@@ -175,7 +321,7 @@ namespace Hack.io.MSBF
                 }
             }
 
-            public void Save(Stream MSBFFile)
+            public void Write(Stream MSBFFile)
             {
                 MSBFFile.WriteReverse(BitConverter.GetBytes((ushort)Type), 0, 2);
                 for (int i = 0; i < 5; i++)
@@ -183,6 +329,8 @@ namespace Hack.io.MSBF
                     MSBFFile.WriteReverse(BitConverter.GetBytes(Data[i]), 0, 2);
                 }
             }
+
+            public override string ToString() => "Invalid";
         }
 
         public sealed class MessageNode : Node
@@ -225,27 +373,41 @@ namespace Hack.io.MSBF
             }
 
             public MessageNode(Stream MSBFFile) : base(MSBFFile) { }
+
+            public override string ToString() => $"Message Node: {MessageID} ({GroupID})";
         }
 
         public sealed class BranchNode : Node
         {
             public override NodeType Type => NodeType.BRANCH;
+            /// <summary>
+            /// Likely Padding, or possibly the amount of condition jump nodes to use
+            /// </summary>
             public ushort Unknown
             {
                 get => Data[1];
                 set => Data[1] = value;
             }
+            /// <summary>
+            /// The condition type
+            /// </summary>
             public ushort Condition
             {
                 get => Data[2];
                 set => Data[2] = value;
             }
-            public ushort YesNoChoice
+            /// <summary>
+            /// Depends on what the condition is
+            /// </summary>
+            public ushort ConditionParameter
             {
                 get => Data[3];
                 set => Data[3] = value;
             }
-            public ushort NodePairID
+            /// <summary>
+            /// True is always the number pointed to by this number. False is always this+1
+            /// </summary>
+            public ushort JumpNodeIndex
             {
                 get => Data[4];
                 set => Data[4] = value;
@@ -257,7 +419,7 @@ namespace Hack.io.MSBF
                     if (Parent is null)
                         return null;
 
-                    return Parent.Nodes[Parent.NodePairs[NodePairID]];
+                    return Parent.Nodes[Parent.ConditionJumpNodes[JumpNodeIndex]];
                 }
             }
             public Node FailureNode
@@ -266,39 +428,50 @@ namespace Hack.io.MSBF
                 {
                     if (Parent is null)
                         return null;
-                    return Parent.Nodes[Parent.NodePairs[NodePairID+1]];
+                    return Parent.Nodes[Parent.ConditionJumpNodes[JumpNodeIndex+1]];
                 }
             }
 
             public BranchNode(Stream MSBFFile) : base(MSBFFile)
             {
             }
+
+            public override string ToString() => $"Branch Node: {Condition}({ConditionParameter})";
         }
 
         public sealed class EventNode : Node
         {
             public override NodeType Type => NodeType.EVENT;
+            /// <summary>
+            /// The Event ID.
+            /// </summary>
             public ushort Event
             {
                 get => Data[1];
                 set => Data[1] = value;
             }
-            public ushort JumpFlowID
+            public ushort NextNodeID
             {
                 get => Data[2];
                 set => Data[2] = value;
             }
-            public ushort FlowID
+            public ushort EventParameter
             {
                 get => Data[4];
                 set => Data[4] = value;
             }
 
             public EventNode(Stream MSBFFile) : base(MSBFFile) { }
+
+            public override string ToString()
+            {
+                return $"Event Node: {Event}({EventParameter})";
+            }
         }
 
         public sealed class EntryNode : Node
         {
+            public string MSBTEntryTag { get; set; }
             public override NodeType Type => NodeType.ENTRY;
             public ushort NextNodeID
             {
@@ -317,7 +490,25 @@ namespace Hack.io.MSBF
             }
 
             public EntryNode(Stream MSBFFile) : base(MSBFFile) { }
+
+            public override string ToString() => $"Flow Entry: {MSBTEntryTag} -> {NextNodeID}";
         }
+
+        //=====================================================================
+
+        /// <summary>
+        /// Cast a MSBF to a ArchiveFile
+        /// </summary>
+        /// <param name="x"></param>
+        public static implicit operator ArchiveFile(MSBF x) => new ArchiveFile(x.FileName, x.Save());
+
+        /// <summary>
+        /// Cast a ArchiveFile to a MSBF
+        /// </summary>
+        /// <param name="x"></param>
+        public static implicit operator MSBF(ArchiveFile x) => new MSBF((MemoryStream)x) { FileName = x.Name };
+
+        //=====================================================================
 
         /// <summary>
         /// An Enum for all the node types.

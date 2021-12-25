@@ -550,6 +550,7 @@ namespace Hack.io
         [DebuggerStepThrough]
         public static string ReadString(this Stream FS, int StringLength, Encoding Encoding)
         {
+            StringLength = StringLength * Encoding.GetStride();
             byte[] bytes = new byte[StringLength];
             FS.Read(bytes, 0, StringLength);
             return Encoding.GetString(bytes, 0, StringLength);
