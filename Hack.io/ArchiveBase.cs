@@ -273,7 +273,7 @@ namespace Hack.io.Util
         /// <param name="FolderPath">Folder to Export to. Don't expect the files to appear here. Expect a Folder with this <see cref="Name"/> to appear</param>
         public void Export(string FolderPath)
         {
-            Directory.CreateDirectory(FolderPath);
+            FileInfoEx.CreateDirectoryIfNotExist(FolderPath);
             foreach (KeyValuePair<string, object> item in Items)
             {
                 if (item.Value is ArchiveFile file)
@@ -283,7 +283,7 @@ namespace Hack.io.Util
                 else if (item.Value is ArchiveDirectory directory)
                 {
                     string newstring = Path.Combine(FolderPath, directory.Name);
-                    Directory.CreateDirectory(newstring);
+                    FileInfoEx.CreateDirectoryIfNotExist(newstring);
                     directory.Export(newstring);
                 }
             }

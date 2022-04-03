@@ -246,6 +246,17 @@ namespace Hack.io.Util
             //file is not locked
             return false;
         }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="Dir"></param>
+        [DebuggerStepThrough]
+        public static void CreateDirectoryIfNotExist(string Dir)
+        {
+            if (!Directory.Exists(Dir))
+                Directory.CreateDirectory(Dir);
+        }
     }
     /// <summary>
     /// Extra BitArray functions
