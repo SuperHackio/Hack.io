@@ -86,12 +86,12 @@ namespace Hack.io.KCL
                 //Vector3 normalB = Vector3.Cross(triangle[1] - triangle[0], triangle[3]).Unit();
                 //Vector3 normalC = Vector3.Cross(triangle[2] - triangle[1], triangle[3]).Unit();
                 face.Length = Vector3.Dot(triangle[1] - triangle[0], normalC);
-                face.PositionIndex = (short)IndexOfVertex(triangle[0], Positions, positionTable);
-                face.DirectionIndex = (short)IndexOfVertex(triangle[3], Normals, normalTable);
-                face.NormalAIndex = (short)IndexOfVertex(normalA, Normals, normalTable);
-                face.NormalBIndex = (short)IndexOfVertex(normalB, Normals, normalTable);
-                face.NormalCIndex = (short)IndexOfVertex(normalC, Normals, normalTable);
-                face.GroupIndex = (short)triangle.GroupIndex;
+                face.PositionIndex = (ushort)IndexOfVertex(triangle[0], Positions, positionTable);
+                face.DirectionIndex = (ushort)IndexOfVertex(triangle[3], Normals, normalTable);
+                face.NormalAIndex = (ushort)IndexOfVertex(normalA, Normals, normalTable);
+                face.NormalBIndex = (ushort)IndexOfVertex(normalB, Normals, normalTable);
+                face.NormalCIndex = (ushort)IndexOfVertex(normalC, Normals, normalTable);
+                face.GroupIndex = (ushort)triangle.GroupIndex;
                 Triangles.Add(face);
                 triangledict.Add((ushort)triangledict.Count, triangle);
 
@@ -441,21 +441,21 @@ namespace Hack.io.KCL
         public class KCLFace
         {
             public float Length;
-            public short PositionIndex;
-            public short DirectionIndex;
-            public short NormalAIndex, NormalBIndex, NormalCIndex;
-            public short GroupIndex;
+            public ushort PositionIndex;
+            public ushort DirectionIndex;
+            public ushort NormalAIndex, NormalBIndex, NormalCIndex;
+            public ushort GroupIndex;
 
             public KCLFace() { }
             public KCLFace(Stream KCLFile)
             {
                 Length = BitConverter.ToSingle(KCLFile.ReadReverse(0, 4), 0);
-                PositionIndex = BitConverter.ToInt16(KCLFile.ReadReverse(0, 2), 0);
-                DirectionIndex = BitConverter.ToInt16(KCLFile.ReadReverse(0, 2), 0);
-                NormalAIndex = BitConverter.ToInt16(KCLFile.ReadReverse(0, 2), 0);
-                NormalBIndex = BitConverter.ToInt16(KCLFile.ReadReverse(0, 2), 0);
-                NormalCIndex = BitConverter.ToInt16(KCLFile.ReadReverse(0, 2), 0);
-                GroupIndex = BitConverter.ToInt16(KCLFile.ReadReverse(0, 2), 0);
+                PositionIndex = BitConverter.ToUInt16(KCLFile.ReadReverse(0, 2), 0);
+                DirectionIndex = BitConverter.ToUInt16(KCLFile.ReadReverse(0, 2), 0);
+                NormalAIndex = BitConverter.ToUInt16(KCLFile.ReadReverse(0, 2), 0);
+                NormalBIndex = BitConverter.ToUInt16(KCLFile.ReadReverse(0, 2), 0);
+                NormalCIndex = BitConverter.ToUInt16(KCLFile.ReadReverse(0, 2), 0);
+                GroupIndex = BitConverter.ToUInt16(KCLFile.ReadReverse(0, 2), 0);
             }
 
             public override string ToString() => $"KCLFace: P = {PositionIndex} | D = {DirectionIndex} | A = {NormalAIndex} | B = {NormalBIndex} | C = {NormalCIndex} | Group = {GroupIndex}";
@@ -968,12 +968,14 @@ o {new FileInfo(OBJFile).Name}
 ";
             List<string> Verts = new List<string>();
             List<string> Norms = new List<string>();
+            int Counter = (obj.Count * 3) + obj.Count;
             for (int i = 0; i < obj.Count; i++)
             {
                 AddVert(MakeVertexString(obj[i].Vertex1));
                 AddVert(MakeVertexString(obj[i].Vertex2));
                 AddVert(MakeVertexString(obj[i].Vertex3));
                 AddNorm(MakeNormalString(obj[i].Normal));
+                bgw?.ReportProgress((int)GetPercentOf(i/4f,Counter),0);
             }
 
             for (int i = 0; i < Verts.Count; i++)
