@@ -497,7 +497,7 @@ namespace Hack.io.BCSV
                     case DataTypes.STRING:
                         String.Add(original[i]);
                         break;
-                    case DataTypes.UNKNOWN:
+                    case DataTypes.CHARARRAY:
                     case DataTypes.NULL:
                     default:
                         throw new Exception();
@@ -747,7 +747,7 @@ namespace Hack.io.BCSV
                         byte Shift = fields.ElementAt(i).Value.ShiftAmount;
                         Data.Add(fields.ElementAt(i).Key, (int)((readvalue & Bitmask) >> Shift));
                         break;
-                    case DataTypes.UNKNOWN:
+                    case DataTypes.CHARARRAY:
                         Data.Add(fields.ElementAt(i).Key, null);
                         Console.WriteLine("=== WARNING ===");
                         Console.WriteLine("BCSV Entry is of the UNKNOWN type (0x01). This shouldn't happen.");
@@ -785,6 +785,7 @@ namespace Hack.io.BCSV
             foreach (KeyValuePair<uint, BCSVField> Field in fields)
             {
                 BCSV.Position = OriginalPosition + Field.Value.EntryOffset;
+                Encoding enc = Encoding.GetEncoding(932);
                 if (Data.ContainsKey(Field.Key))
                 {
                     switch (Field.Value.DataType)
@@ -795,7 +796,23 @@ namespace Hack.io.BCSV
                             else
                                 BCSV.WriteReverse(BitConverter.GetBytes(int.Parse(Data[Field.Key].ToString())), 0, 4);
                             break;
-                        case DataTypes.UNKNOWN:
+                        case DataTypes.CHARARRAY:
+
+                            if (Data[Field.Key] is string Str)
+                                WriteCharArrayFromString(Str);
+                            else if (Data[Field.Key] is char[] chararray)
+                                WriteCharArrayFromString(chararray.ToString());
+                            else
+                                throw new Exception("Error type for CHARARRAY.");
+
+                            void WriteCharArrayFromString(string STRING)
+                            {
+
+                                byte[] data = enc.GetBytes(STRING);
+                                if (data.Length > 32)
+                                    throw new Exception($"The string \"{STRING}\" encodes to a length of {data.Length}, while the max length is 32!");
+                                BCSV.Write(data, 0, data.Length);
+                            }
                             break;
                         case DataTypes.FLOAT:
                             BCSV.WriteReverse(BitConverter.GetBytes((float)Data[Field.Key]), 0, 4);
@@ -810,7 +827,6 @@ namespace Hack.io.BCSV
                             BCSV.WriteByte((byte)Data[Field.Key]);
                             break;
                         case DataTypes.STRING:
-                            Encoding enc = Encoding.GetEncoding(932);
                             uint StringOffset = 0;
                             for (int j = 0; j < Strings.Count; j++)
                             {
@@ -970,15 +986,15 @@ namespace Hack.io.BCSV
         /// </summary>
         INT32 = 0,
         /// <summary>
-        /// Unknown. Don't use.
+        /// A 32 byte array of characters. (32 bytes)<para/>Like a string, but limited to 32 bytes. <see cref="byte"/>[] and <see cref="string"/> are accepted here
         /// </summary>
-        UNKNOWN = 1,
+        CHARARRAY = 1,
         /// <summary>
         /// 32 bit decimal value (4 Bytes)
         /// </summary>
         FLOAT = 2,
         /// <summary>
-        /// Unsigned 32 bit integer (4 Bytes)
+        /// Unsigned 32 bit integer (4 Bytes)<para/>It's worth noting that most games do not actually use this to tell the difference between UInt and Int
         /// </summary>
         UINT32 = 3,
         /// <summary>
