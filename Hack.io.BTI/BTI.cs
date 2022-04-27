@@ -72,6 +72,7 @@ namespace Hack.io.BTI
                 MinificationFilter = MinFilter
             };
             entry.AddRange(Source);
+            Add(entry);
         }
 
         public override void Save(string filename)
