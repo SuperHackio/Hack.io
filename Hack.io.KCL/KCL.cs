@@ -874,7 +874,7 @@ namespace Hack.io.KCL
                 if (string.IsNullOrWhiteSpace(Lines[i]) || Lines[i].StartsWith("#"))
                     continue;
 
-                string[] args = Lines[i].Split();
+                string[] args = Lines[i].Split(new char[0], StringSplitOptions.RemoveEmptyEntries);
 
                 if (args[0].Equals("usemtl"))
                 {
