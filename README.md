@@ -2,6 +2,9 @@
 **A Collection of File In/Out libraries for various formats**<br/>
 Previously referred to as "Hackio.IO"
 
+# NOTICE
+Please be aware that the Hack.io libraries are indefinitely in a period of transitioning to .NET 8. I do not know when or if I will update every library.
+
 ## What is it?
 The Hack.io libraries are easy-to-use, modular C# libraries that can be used in multiple projects. I made these with the intent of just using them so I wouldn't have to constantly repeat my code when doing projects.
 In the end, here they are, feel free to use them in your projects.
@@ -14,7 +17,11 @@ Hack.io is the base library used by all the other Hack.io libraries.
 - **Hack.io.BCK**<br/>
 Bone Animations for J3D Models (SMG/SMG2, SMS, Pikmin, etc.)
 
-- **Hack.io.BMD**<br/>
+- **Hack.io.BAS**<br/>
+Sound Links for BCK animations in J3D Models (SMG/SMG2, SMS, Pikmin, etc.)
+This library is required for Hack.io.BCK, as some games embed their BAS files into the bck directly instead of being separate.
+
+- **Hack.io.BMD** (DEPRICATED)<br/>
 Library for J3D Models (SMG/SMG2, SMS, Pikmin, etc.)<br/>
 Heavily based on SuperBMD, but only does Read/Write to/from BMD/BDL. (no model importing and no model exporting)
 
