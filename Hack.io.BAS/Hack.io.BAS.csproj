@@ -4,19 +4,18 @@
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <Title>Hack.io.BPK</Title>
-    <Version>2.0.0.0</Version>
+    <Title>Hack.io.BAS</Title>
+    <Version>1.0.0.0</Version>
     <Authors>SuperHackio</Authors>
-    <Description>IO Library for Binary Palette Keyframes (.bpk)</Description>
     <Company>Super Hackio Incorporated</Company>
-    <Copyright>©Super Hackio Incorporated 2019-2023</Copyright>
+    <Description>IO Library for Binary Action Sound (.bas)</Description>
+    <Copyright>©Super Hackio Incorporated 2023-2023</Copyright>
     <PackageProjectUrl>https://github.com/SuperHackio/Hack.io</PackageProjectUrl>
     <RepositoryUrl>https://github.com/SuperHackio/Hack.io</RepositoryUrl>
-    <PackageReleaseNotes>Updated to .NET 7</PackageReleaseNotes>
+    <PackageReleaseNotes>First Release</PackageReleaseNotes>
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Hack.io.J3D\Hack.io.J3D.csproj" />
     <ProjectReference Include="..\Hack.io\Hack.io.csproj" />
   </ItemGroup>
 

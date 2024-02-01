@@ -1,69 +1,24 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
-<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
-  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+<Project Sdk="Microsoft.NET.Sdk">
+
   <PropertyGroup>
-    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
-    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
-    <ProjectGuid>{5E579A36-CBC3-41E1-9A25-1BC665CEC010}</ProjectGuid>
-    <OutputType>Library</OutputType>
-    <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>Hack.io.BCK</RootNamespace>
-    <AssemblyName>Hack.io.BCK</AssemblyName>
-    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
-    <FileAlignment>512</FileAlignment>
-    <Deterministic>true</Deterministic>
-    <TargetFrameworkProfile />
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <Title>Hack.io.BCK</Title>
+    <Authors>SuperHackio</Authors>
+    <Company>Super Hackio Incorporated</Company>
+    <Description>IO Library for Binary Curve Keyframes (.bck)</Description>
+    <Copyright>©Super Hackio Incorporated 2019-2023</Copyright>
+    <PackageProjectUrl>https://github.com/SuperHackio/Hack.io</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/SuperHackio/Hack.io</RepositoryUrl>
+    <PackageReleaseNotes>Now Requires Hack.io.BAS for embedded sounds</PackageReleaseNotes>
+    <Version>2.1.0.0</Version>
   </PropertyGroup>
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
-    <DebugSymbols>true</DebugSymbols>
-    <DebugType>full</DebugType>
-    <Optimize>false</Optimize>
-    <OutputPath>bin\Debug\</OutputPath>
-    <DefineConstants>DEBUG;TRACE</DefineConstants>
-    <ErrorReport>prompt</ErrorReport>
-    <WarningLevel>4</WarningLevel>
-    <DocumentationFile>bin\Debug\Hack.io.BCK.xml</DocumentationFile>
-  </PropertyGroup>
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
-    <DebugType>pdbonly</DebugType>
-    <Optimize>true</Optimize>
-    <OutputPath>bin\Release\</OutputPath>
-    <DefineConstants>TRACE</DefineConstants>
-    <ErrorReport>prompt</ErrorReport>
-    <WarningLevel>4</WarningLevel>
-    <DocumentationFile>bin\Release\Hack.io.BCK.xml</DocumentationFile>
-  </PropertyGroup>
+
   <ItemGroup>
-    <Reference Include="System" />
-    <Reference Include="System.Core" />
-    <Reference Include="System.Xml.Linq" />
-    <Reference Include="System.Data.DataSetExtensions" />
-    <Reference Include="Microsoft.CSharp" />
-    <Reference Include="System.Data" />
-    <Reference Include="System.Net.Http" />
-    <Reference Include="System.Xml" />
+    <ProjectReference Include="..\Hack.io.BAS\Hack.io.BAS.csproj" />
+    <ProjectReference Include="..\Hack.io.J3D\Hack.io.J3D.csproj" />
+    <ProjectReference Include="..\Hack.io\Hack.io.csproj" />
   </ItemGroup>
-  <ItemGroup>
-    <Compile Include="BCK.cs" />
-    <Compile Include="Properties\AssemblyInfo.cs" />
-  </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\Hack.io.BMD\Hack.io.BMD.csproj">
-      <Project>{cd2ca20a-e6ad-4b1e-9d04-fb98970b61d5}</Project>
-      <Name>Hack.io.BMD</Name>
-    </ProjectReference>
-    <ProjectReference Include="..\Hack.io.J3D\Hack.io.J3D.csproj">
-      <Project>{a99f6dde-0aed-432e-8866-f25375e3c4fa}</Project>
-      <Name>Hack.io.J3D</Name>
-    </ProjectReference>
-    <ProjectReference Include="..\Hack.io.RARC\Hack.io.RARC.csproj">
-      <Project>{4f4162cc-70ff-4eb9-ab34-d5ff98490c34}</Project>
-      <Name>Hack.io.RARC</Name>
-    </ProjectReference>
-    <ProjectReference Include="..\Hack.io\Hack.io.csproj">
-      <Project>{389f751d-db2a-4746-b3bc-88e106c361ce}</Project>
-      <Name>Hack.io</Name>
-    </ProjectReference>
-  </ItemGroup>
-  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+
 </Project>

@@ -1,712 +1,302 @@
-﻿using Hack.io.Util;
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Text;
-using static Hack.io.J3D.J3DGraph;
+﻿using System.Text;
+using Hack.io.Interface;
+using Hack.io.Utility;
+using Hack.io.J3D;
+using static Hack.io.BTK.BTK;
 
-namespace Hack.io.BTK
+namespace Hack.io.BTK;
+
+/// <summary>
+/// Binary Texture Keyframes<para/>
+/// J3D file format for controlling the texture coordinate settings inside a 3D model's texture generators
+/// </summary>
+public class BTK : J3DAnimationBase<Animation>, ILoadSaveFile
 {
+    /// <inheritdoc cref="Interface.DocGen.DOC_MAGIC"/>
+    public const string MAGIC = "J3D1btk1";
+    /// <inheritdoc cref="J3D.DocGen.COMMON_CHUNKMAGIC"/>
+    public const string CHUNKMAGIC = "TTK1";
+
     /// <summary>
-    /// Binary Texture SRT Keys.
-    /// <para/>Texture Scale, Rotation, and Translation Animation.
+    /// If true, uses Maya math instead of normal J3D Math
     /// </summary>
-    public class BTK
+    public bool UseMaya { get; set; }
+    /// <summary>
+    /// Rotational Multiplier.<para/>
+    /// An angle scale of 1 means you can have rotations between -180 and 180. An angle scale of 2 allows for -360 to 360.
+    /// </summary>
+    public sbyte RotationMultiplier { get; set; }
+
+    /// <inheritdoc/>
+    public void Load(Stream Strm)
     {
-        /// <summary>
-        /// Filename of this BRK file.<para/>Set using <see cref="Save(string)"/>;
-        /// </summary>
-        public string Name { get; private set; } = null;
-        /// <summary>
-        /// Loop Mode of the BRK animation. See the <seealso cref="LoopMode"/> enum for values
-        /// </summary>
-        public LoopMode Loop { get; set; } = LoopMode.ONCE;
-        /// <summary>
-        /// Length of the animation in Frames. (Game Framerate = 1 second)
-        /// </summary>
-        public ushort Time { get; set; }
-        /// <summary>
-        /// Unknown.
-        /// </summary>
-        public sbyte RotationMultiplier { get; set; }
-        /// <summary>
-        /// Animations that apply to the SRT values of a Texture
-        /// </summary>
-        public List<Animation> TextureAnimations { get; set; } = new List<Animation>();
+        FileUtil.ExceptionOnBadMagic(Strm, MAGIC);
+        uint FileSize = Strm.ReadUInt32(),
+            ChunkCount = Strm.ReadUInt32();
+        Strm.ReadJ3DSubVersion();
 
-        private const string Magic = "J3D1btk1";
-        private const string Magic2 = "TTK1";
+        //Only 1 chunk is supported
+        uint ChunkStart = (uint)Strm.Position;
+        FileUtil.ExceptionOnBadMagic(Strm, CHUNKMAGIC);
+        uint ChunkSize = Strm.ReadUInt32();
+        Loop = Strm.ReadEnum<LoopMode, byte>(StreamUtil.ReadUInt8);
+        RotationMultiplier = (sbyte)Strm.ReadByte();
+        float rotationScale = (float)(Math.Pow(2, RotationMultiplier) / 0x7FFF);
+        Duration = Strm.ReadUInt16();
 
-        /// <summary>
-        /// Create an Empty BTK
-        /// </summary>
-        public BTK() { }
-        /// <summary>
-        /// Open a BTK from a file
-        /// </summary>
-        /// <param name="filename">File to open</param>
-        public BTK(string filename)
+        ushort AnimationCount = (ushort)(Strm.ReadUInt16() / 3),
+               ScaleCount = Strm.ReadUInt16(),
+               RotationCount = Strm.ReadUInt16(),
+               TranslationCount = Strm.ReadUInt16();
+
+        uint AnimationTableOffset = Strm.ReadUInt32() + ChunkStart,
+             RemapTableOffset = Strm.ReadUInt32() + ChunkStart,
+             MaterialSTOffset = Strm.ReadUInt32() + ChunkStart,
+             TextureMapIDTableOffset = Strm.ReadUInt32() + ChunkStart,
+             TextureCenterTableOffset = Strm.ReadUInt32() + ChunkStart,
+             ScaleTableOffset = Strm.ReadUInt32() + ChunkStart,
+             RotationTableOffset = Strm.ReadUInt32() + ChunkStart,
+             TranslationTableOffset = Strm.ReadUInt32() + ChunkStart;
+
+        Strm.Position = ChunkStart + 0x5C;
+        UseMaya = Strm.ReadUInt32() == 1;
+
+        float[] ScaleTable       = Strm.ReadMultiAtOffset(ScaleTableOffset,       StreamUtil.ReadMultiSingle, ScaleCount);
+        short[] RotationTable    = Strm.ReadMultiAtOffset(RotationTableOffset,    StreamUtil.ReadMultiInt16,  RotationCount);
+        float[] TranslationTable = Strm.ReadMultiAtOffset(TranslationTableOffset, StreamUtil.ReadMultiSingle, TranslationCount);
+
+        string[] MaterialNames = Strm.ReadJ3DStringTable((int)MaterialSTOffset);
+
+        Strm.Position = RemapTableOffset;
+        ushort[] RemapIndicies = Strm.ReadMultiUInt16(AnimationCount);
+
+        for (int i = 0; i < AnimationCount; i++)
         {
-            FileStream BTKFile = new FileStream(filename, FileMode.Open);
+            Animation anim = new() { MaterialName = MaterialNames[i] }; //This is the only thing that doesn't get remapped
+            int Index = RemapIndicies[i]; //Assuming this is how it works...
 
-            Read(BTKFile);
+            Strm.Position = TextureMapIDTableOffset + Index;
+            anim.TextureGeneratorId = Strm.ReadUInt8(); //Potential issue? Does the game map these by identity always? Or is this included in the Remap? (It's not so obvious unlike the names)
 
-            BTKFile.Close();
-            Name = filename;
-        }
-        /// <summary>
-        /// Create a BTK from a Stream.
-        /// </summary>
-        /// <param name="BTKStream">Stream containing the BRK</param>
-        /// <param name="filename">Name to give this BRK file</param>
-        public BTK(Stream BTKStream, string filename = null)
-        {
-            Read(BTKStream);
-            Name = filename;
-        }
-        /// <summary>
-        /// Save the BTK to a file
-        /// </summary>
-        /// <param name="Filename">New file to save to</param>
-        public void Save(string Filename = null)
-        {
-            if (Name == null && Filename == null)
-                throw new Exception("No Filename has been given");
-            else if (Filename != null)
-                Name = Filename;
+            Strm.Position = TextureCenterTableOffset + (Index * 0x0C);
+            anim.Center = Strm.ReadMultiSingle(anim.Center.Length);
 
-            FileStream BTKFile = new FileStream(Name, FileMode.Create);
+            Strm.Position = AnimationTableOffset + (Index * 0x36);
 
-            Write(BTKFile);
+            anim.ScaleU = J3D.Utility.ReadAnimationTrackFloat(Strm, ScaleTable, 1);
+            anim.RotationU = J3D.Utility.ReadAnimationTrackInt16(Strm, RotationTable, rotationScale);
+            anim.TranslationU = J3D.Utility.ReadAnimationTrackFloat(Strm, TranslationTable, 1);
 
-            BTKFile.Close();
-        }
-        /// <summary>
-        /// Save the BTK file to a memorystream
-        /// </summary>
-        /// <returns></returns>
-        public MemoryStream Save()
-        {
-            MemoryStream MS = new MemoryStream();
-            Write(MS);
-            return MS;
+            anim.ScaleV = J3D.Utility.ReadAnimationTrackFloat(Strm, ScaleTable, 1);
+            anim.RotationV = J3D.Utility.ReadAnimationTrackInt16(Strm, RotationTable, rotationScale);
+            anim.TranslationV = J3D.Utility.ReadAnimationTrackFloat(Strm, TranslationTable, 1);
+
+            anim.ScaleW = J3D.Utility.ReadAnimationTrackFloat(Strm, ScaleTable, 1);
+            anim.RotationW = J3D.Utility.ReadAnimationTrackInt16(Strm, RotationTable, rotationScale);
+            anim.TranslationW = J3D.Utility.ReadAnimationTrackFloat(Strm, TranslationTable, 1);
+
+            Add(anim);
         }
 
+        Strm.Position = ChunkStart + ChunkSize;
+    }
+
+    /// <inheritdoc/>
+    public void Save(Stream Strm)
+    {
+        float rotationScale = (float)(Math.Pow(2, RotationMultiplier) / 0x7FFF);
+
+        long Start = Strm.Position;
+        Strm.WriteString(MAGIC, Encoding.ASCII, null);
+        Strm.WritePlaceholder(4); //FileSize
+        Strm.Write(new byte[4] { 0x00, 0x00, 0x00, 0x01 }, 0, 4); //Chunk Count
+        Strm.WriteJ3DSubVersion();
+
+        long ChunkStart = Strm.Position;
+        Strm.WriteString(CHUNKMAGIC, Encoding.ASCII, null);
+        Strm.WritePlaceholder(4); //ChunkSize
+        Strm.WriteByte((byte)Loop);
+        Strm.WriteByte((byte)RotationMultiplier);
+        Strm.WriteUInt16(Duration);
+        Strm.WriteUInt16((ushort)(Count * 3));
+        Strm.WritePlaceholderMulti(2, 3); //Count Placeholders
+        Strm.WritePlaceholderMulti(4, 8); //Offset Placeholders
+        //Here's normally the post tex data but...there's no support for something that's never used (to anyones knowledge)
+        Strm.Position = ChunkStart + 0x5C;
+        Strm.WriteInt32(UseMaya ? 1 : 0);
+
+        List<string> Names = new();
+        List<ushort> RemapIndexTable = new();
+        List<byte> GeneratorTable = new();
+        List<float[]> CenterTable = new();
+        List<float> ScaleTable = new();
+        List<short> RotationTable = new();
+        List<float> TranslationTable = new();
+
+        long AnimationTableOffset = Strm.Position;
+        for (int i = 0; i < Count; i++)
+        {
+            Names.Add(this[i].MaterialName);
+            int RemapIndex = i; //Here would be a good idea to search and see if there's any other identical tracks that have already been written
+            RemapIndexTable.Add((ushort)RemapIndex);
+            GeneratorTable.Add(this[RemapIndex].TextureGeneratorId);
+            CenterTable.Add(this[RemapIndex].Center);
+
+            J3D.Utility.WriteAnimationTrackFloat(Strm, this[RemapIndex].ScaleU, 1, ref ScaleTable);
+            J3D.Utility.WriteAnimationTrackInt16(Strm, this[RemapIndex].RotationU, rotationScale, ref RotationTable);
+            J3D.Utility.WriteAnimationTrackFloat(Strm, this[RemapIndex].TranslationU, 1, ref TranslationTable);
+
+            J3D.Utility.WriteAnimationTrackFloat(Strm, this[RemapIndex].ScaleV, 1, ref ScaleTable);
+            J3D.Utility.WriteAnimationTrackInt16(Strm, this[RemapIndex].RotationV, rotationScale, ref RotationTable);
+            J3D.Utility.WriteAnimationTrackFloat(Strm, this[RemapIndex].TranslationV, 1, ref TranslationTable);
+
+            J3D.Utility.WriteAnimationTrackFloat(Strm, this[RemapIndex].ScaleW, 1, ref ScaleTable);
+            J3D.Utility.WriteAnimationTrackInt16(Strm, this[RemapIndex].RotationW, rotationScale, ref RotationTable);
+            J3D.Utility.WriteAnimationTrackFloat(Strm, this[RemapIndex].TranslationW, 1, ref TranslationTable);
+        }
+
+        Strm.PadTo(4, J3D.Utility.PADSTRING);
+
+        //Remap table!
+        //TODO: Experiment with this. maybe it's useful for onboard file compression
+        // for now though just use Identity.
+        long RemapTableOffset = Strm.Position;
+        Strm.WriteMultiUInt16(RemapIndexTable);
+        Strm.PadTo(4, J3D.Utility.PADSTRING);
+
+        //String Table
+        long StringTableOffset = Strm.Position;
+        Strm.WriteJ3DStringTable(Names);
+        Strm.PadTo(4, J3D.Utility.PADSTRING);
+
+        //Generator Table
+        long TexMapIDTableOffset = Strm.Position;
+        Strm.WriteMulti(GeneratorTable, StreamUtil.WriteUInt8);
+        Strm.PadTo(4, J3D.Utility.PADSTRING);
+
+        long CenterTableOffset = Strm.Position;
+        Strm.WriteMulti(CenterTable, StreamUtil.WriteMultiSingle); //I can't believe this works lol
+        Strm.PadTo(4, J3D.Utility.PADSTRING);
+
+        long ScaleTableOffset = Strm.Position;
+        Strm.WriteMultiSingle(ScaleTable);
+        Strm.PadTo(4, J3D.Utility.PADSTRING);
+
+        long RotationTableOffset = Strm.Position;
+        Strm.WriteMultiInt16(RotationTable);
+        Strm.PadTo(4, J3D.Utility.PADSTRING);
+
+        long TranslationTableOffset = Strm.Position;
+        Strm.WriteMultiSingle(TranslationTable);
+        Strm.PadTo(32, J3D.Utility.PADSTRING);
+
+        long FileLength = Strm.Position;
+
+        Strm.Position = Start + 0x08;
+        Strm.WriteUInt32((uint)(FileLength - Start));
+
+        Strm.Position = ChunkStart + 0x04;
+        Strm.WriteUInt32((uint)((FileLength - (ChunkStart - Start)) - 0x04));
+
+        Strm.Position = ChunkStart + 0x0E;
+        Strm.WriteUInt16((ushort)ScaleTable.Count);
+        Strm.WriteUInt16((ushort)RotationTable.Count);
+        Strm.WriteUInt16((ushort)TranslationTable.Count);
+        Strm.WriteUInt32((uint)(AnimationTableOffset - ChunkStart));
+        Strm.WriteUInt32((uint)(RemapTableOffset - ChunkStart));
+        Strm.WriteUInt32((uint)(StringTableOffset - ChunkStart));
+        Strm.WriteUInt32((uint)(TexMapIDTableOffset - ChunkStart));
+        Strm.WriteUInt32((uint)(CenterTableOffset - ChunkStart));
+        Strm.WriteUInt32((uint)(ScaleTableOffset - ChunkStart));
+        Strm.WriteUInt32((uint)(RotationTableOffset - ChunkStart));
+        Strm.WriteUInt32((uint)(TranslationTableOffset - ChunkStart));
+
+        Strm.Position = FileLength;
+    }
+
+    /// <inheritdoc cref="J3D.DocGen.COMMON_ANIMATIONCLASS"/>
+    public class Animation : IJ3DAnimationContainer
+    {
+        /// <inheritdoc cref="J3D.DocGen.COMMON_MATERIALNAME"/>
+        public string MaterialName { get; set; } = "";
         /// <summary>
-        /// 
+        /// index to the Texture Generator inside the model to target
         /// </summary>
-        /// <returns></returns>
-        public override string ToString() => $"{(Name == null ? "Unnamed BTK file" : new FileInfo(Name).Name)} {(TextureAnimations.Count > 0 ? $"[{TextureAnimations.Count} Texture SRT Animations] " : "")}";
-
+        public byte TextureGeneratorId { get; set; }
         /// <summary>
-        /// Animation Container
+        /// The Origin of Rotation
         /// </summary>
-        public class Animation
+        public float[] Center
         {
-            /// <summary>
-            /// Name of the Material that this animation applies to
-            /// </summary>
-            public string MaterialName { get; set; }
-            /// <summary>
-            /// ID of the texture within the material that this animation affects.
-            /// </summary>
-            public byte MaterialTextureID { get; set; }
-            /// <summary>
-            /// The Origin of Rotation
-            /// </summary>
-            public float[] Center { get; set; }
-            /// <summary>
-            /// Unknown
-            /// </summary>
-            public ushort RemapIndex { get; set; }
-            /// <summary>
-            /// List of Scale U Keyframes
-            /// </summary>
-            public List<Keyframe> ScaleUFrames { get; set; } = new List<Keyframe>();
-            /// <summary>
-            /// List of Scale V Keyframes
-            /// </summary>
-            public List<Keyframe> ScaleVFrames { get; set; } = new List<Keyframe>();
-            /// <summary>
-            /// List of Scale W Keyframes
-            /// </summary>
-            public List<Keyframe> ScaleWFrames { get; set; } = new List<Keyframe>();
-            /// <summary>
-            /// List of Rotation U Keyframes
-            /// </summary>
-            public List<Keyframe> RotationUFrames { get; set; } = new List<Keyframe>();
-            /// <summary>
-            /// List of Rotation V Keyframes
-            /// </summary>
-            public List<Keyframe> RotationVFrames { get; set; } = new List<Keyframe>();
-            /// <summary>
-            /// List of Rotation W Keyframes
-            /// </summary>
-            public List<Keyframe> RotationWFrames { get; set; } = new List<Keyframe>();
-            /// <summary>
-            /// List of Translation U Keyframes
-            /// </summary>
-            public List<Keyframe> TranslationUFrames { get; set; } = new List<Keyframe>();
-            /// <summary>
-            /// List of Translation V Keyframes
-            /// </summary>
-            public List<Keyframe> TranslationVFrames { get; set; } = new List<Keyframe>();
-            /// <summary>
-            /// List of Translation W Keyframes
-            /// </summary>
-            public List<Keyframe> TranslationWFrames { get; set; } = new List<Keyframe>();
-
-            /// <summary>
-            /// Create an empty animation
-            /// </summary>
-            public Animation() { }
-            /// <summary>
-            /// 
-            /// </summary>
-            /// <returns></returns>
-            public override string ToString() => $"{MaterialName} (Texture {MaterialTextureID}) [{TranslationUFrames.Count + TranslationVFrames.Count + TranslationWFrames.Count}|{RotationUFrames.Count + RotationVFrames.Count + RotationWFrames.Count}|{ScaleUFrames.Count + ScaleVFrames.Count + ScaleWFrames.Count}]";
-
-            /// <summary>
-            /// Animation Keyframe Data.
-            /// <para/>Data is stored as <see cref="float"/>s
-            /// </summary>
-            public class Keyframe
+            get => mCenter;
+            set
             {
-                /// <summary>
-                /// The Time in the timeline that this keyframe is assigned to
-                /// </summary>
-                public ushort Time { get; set; }
-                /// <summary>
-                /// The Value to set to
-                /// </summary>
-                public float Value { get; set; }
-                /// <summary>
-                /// Tangents affect the interpolation between two consecutive keyframes
-                /// </summary>
-                public float IngoingTangent { get; set; }
-                /// <summary>
-                /// Tangents affect the interpolation between two consecutive keyframes
-                /// </summary>
-                public float OutgoingTangent { get; set; }
-
-                /// <summary>
-                /// Create an Empty Keyframe
-                /// </summary>
-                public Keyframe() { }
-                /// <summary>
-                /// 
-                /// </summary>
-                /// <returns></returns>
-                public override string ToString() => $"Time: {Time} [{Value}]";
+                if (value is null)
+                    throw new NullReferenceException("Cannot set Center to Null");
+                if (value.Length != 3)
+                    throw new IndexOutOfRangeException("The provided array length does not match 3");
+                mCenter = value;
             }
         }
-
-        private void Read(Stream BTKFile)
-        {
-            if (BTKFile.ReadString(8) != Magic)
-                throw new Exception("Invalid Identifier. Expected \"J3D1btk1\"");
-
-            uint Filesize = BitConverter.ToUInt32(BTKFile.ReadReverse(0, 4), 0);
-            uint SectionCount = BitConverter.ToUInt32(BTKFile.ReadReverse(0, 4), 0);
-            if (SectionCount != 1)
-                throw new Exception(SectionCount > 1 ? "More than 1 section is in this BTK! Please send it to Super Hackio for investigation" : "There are no sections in this BTK!");
-
-            BTKFile.Seek(0x10, SeekOrigin.Current);
-            uint TTKStart = (uint)BTKFile.Position;
-
-            if (BTKFile.ReadString(4) != Magic2)
-                throw new Exception("Invalid Identifier. Expected \"TTK1\"");
-
-            uint TRK1Length = BitConverter.ToUInt32(BTKFile.ReadReverse(0, 4), 0);
-            Loop = (LoopMode)BTKFile.ReadByte();
-            RotationMultiplier = (sbyte)BTKFile.ReadByte();
-
-            Time = BitConverter.ToUInt16(BTKFile.ReadReverse(0, 2), 0);
-            ushort AnimationCount = (ushort)(BitConverter.ToUInt16(BTKFile.ReadReverse(0, 2), 0) / 3),
-                ScaleCount = BitConverter.ToUInt16(BTKFile.ReadReverse(0, 2), 0), RotationCount = BitConverter.ToUInt16(BTKFile.ReadReverse(0, 2), 0), TranslationCount = BitConverter.ToUInt16(BTKFile.ReadReverse(0, 2), 0);
-
-            uint AnimationTableOffset = BitConverter.ToUInt32(BTKFile.ReadReverse(0, 4), 0) + TTKStart, RemapTableOffset = BitConverter.ToUInt32(BTKFile.ReadReverse(0, 4), 0) + TTKStart,
-                MaterialSTOffset = BitConverter.ToUInt32(BTKFile.ReadReverse(0, 4), 0) + TTKStart, TextureMapIDTableOffset = BitConverter.ToUInt32(BTKFile.ReadReverse(0, 4), 0) + TTKStart,
-                TextureCenterTableOffset = BitConverter.ToUInt32(BTKFile.ReadReverse(0, 4), 0) + TTKStart, ScaleTableOffset = BitConverter.ToUInt32(BTKFile.ReadReverse(0, 4), 0) + TTKStart,
-                RotationTableOffset = BitConverter.ToUInt32(BTKFile.ReadReverse(0, 4), 0) + TTKStart, TranslationTableOffset = BitConverter.ToUInt32(BTKFile.ReadReverse(0, 4), 0) + TTKStart;
-
-            BTKFile.Seek(MaterialSTOffset, SeekOrigin.Begin);
-            List<KeyValuePair<ushort, string>> MaterialNames = new List<KeyValuePair<ushort, string>>();
-            ushort StringCount = BitConverter.ToUInt16(BTKFile.ReadReverse(0, 2), 0);
-            BTKFile.Seek(2, SeekOrigin.Current);
-            for (int i = 0; i < StringCount; i++)
-            {
-                ushort hash = BitConverter.ToUInt16(BTKFile.ReadReverse(0, 2), 0);
-                long PausePosition = BTKFile.Position + 2;
-                BTKFile.Seek(MaterialSTOffset + BitConverter.ToUInt16(BTKFile.ReadReverse(0, 2), 0), SeekOrigin.Begin);
-                MaterialNames.Add(new KeyValuePair<ushort, string>(hash, BTKFile.ReadString()));
-                BTKFile.Position = PausePosition;
-            }
-
-            BTKFile.Seek(TextureMapIDTableOffset, SeekOrigin.Begin);
-            List<byte> Texture_Index = new List<byte>();
-            for (int i = 0; i < AnimationCount; i++)
-                Texture_Index.Add((byte)BTKFile.ReadByte());
-
-            BTKFile.Seek(TextureCenterTableOffset, SeekOrigin.Begin);
-            List<float[]> Centers = new List<float[]>();
-            for (int i = 0; i < AnimationCount; i++)
-                Centers.Add(new float[3] { BitConverter.ToSingle(BTKFile.ReadReverse(0, 4), 0), BitConverter.ToSingle(BTKFile.ReadReverse(0, 4), 0), BitConverter.ToSingle(BTKFile.ReadReverse(0, 4), 0) });
-
-            BTKFile.Seek(RemapTableOffset, SeekOrigin.Begin);
-            List<ushort> RemapTable = new List<ushort>();
-            for (int i = 0; i < AnimationCount; i++)
-                RemapTable.Add(BitConverter.ToUInt16(BTKFile.ReadReverse(0, 2), 0));
-
-            List<float> ScaleTable = new List<float>();
-            List<short> RotationTable = new List<short>();
-            List<float> TranslationTable = new List<float>();
-
-            BTKFile.Seek(ScaleTableOffset, SeekOrigin.Begin);
-            for (int i = 0; i < ScaleCount; i++)
-                ScaleTable.Add(BitConverter.ToSingle(BTKFile.ReadReverse(0, 4), 0));
-
-            BTKFile.Seek(RotationTableOffset, SeekOrigin.Begin);
-            for (int i = 0; i < RotationCount; i++)
-                RotationTable.Add(BitConverter.ToInt16(BTKFile.ReadReverse(0, 2), 0));
-
-            BTKFile.Seek(TranslationTableOffset, SeekOrigin.Begin);
-            for (int i = 0; i < TranslationCount; i++)
-                TranslationTable.Add(BitConverter.ToSingle(BTKFile.ReadReverse(0, 4), 0));
-
-            BTKFile.Seek(AnimationTableOffset, SeekOrigin.Begin);
-            short KeyFrameCount, TargetKeySet, TangentType;
-            for (int i = 0; i < AnimationCount; i++)
-            {
-                Animation Anim = new Animation() { MaterialName = MaterialNames[i].Value, MaterialTextureID = Texture_Index[i], RemapIndex = RemapTable[i], Center = Centers[i] };
-                KeyFrameCount = BitConverter.ToInt16(BTKFile.ReadReverse(0, 2), 0);
-                TargetKeySet = BitConverter.ToInt16(BTKFile.ReadReverse(0, 2), 0);
-                TangentType = BitConverter.ToInt16(BTKFile.ReadReverse(0, 2), 0);
-                Anim.ScaleUFrames = ReadKeyframe(ScaleTable, 1, KeyFrameCount, TargetKeySet, TangentType);
-                KeyFrameCount = BitConverter.ToInt16(BTKFile.ReadReverse(0, 2), 0);
-                TargetKeySet = BitConverter.ToInt16(BTKFile.ReadReverse(0, 2), 0);
-                TangentType = BitConverter.ToInt16(BTKFile.ReadReverse(0, 2), 0);
-                Anim.RotationUFrames = ReadKeyframe(RotationTable, RotationMultiplier, KeyFrameCount, TargetKeySet, TangentType);
-                KeyFrameCount = BitConverter.ToInt16(BTKFile.ReadReverse(0, 2), 0);
-                TargetKeySet = BitConverter.ToInt16(BTKFile.ReadReverse(0, 2), 0);
-                TangentType = BitConverter.ToInt16(BTKFile.ReadReverse(0, 2), 0);
-                Anim.TranslationUFrames = ReadKeyframe(TranslationTable, 1, KeyFrameCount, TargetKeySet, TangentType);
-
-                KeyFrameCount = BitConverter.ToInt16(BTKFile.ReadReverse(0, 2), 0);
-                TargetKeySet = BitConverter.ToInt16(BTKFile.ReadReverse(0, 2), 0);
-                TangentType = BitConverter.ToInt16(BTKFile.ReadReverse(0, 2), 0);
-                Anim.ScaleVFrames = ReadKeyframe(ScaleTable, 1, KeyFrameCount, TargetKeySet, TangentType);
-                KeyFrameCount = BitConverter.ToInt16(BTKFile.ReadReverse(0, 2), 0);
-                TargetKeySet = BitConverter.ToInt16(BTKFile.ReadReverse(0, 2), 0);
-                TangentType = BitConverter.ToInt16(BTKFile.ReadReverse(0, 2), 0);
-                Anim.RotationVFrames = ReadKeyframe(RotationTable, RotationMultiplier, KeyFrameCount, TargetKeySet, TangentType);
-                KeyFrameCount = BitConverter.ToInt16(BTKFile.ReadReverse(0, 2), 0);
-                TargetKeySet = BitConverter.ToInt16(BTKFile.ReadReverse(0, 2), 0);
-                TangentType = BitConverter.ToInt16(BTKFile.ReadReverse(0, 2), 0);
-                Anim.TranslationVFrames = ReadKeyframe(TranslationTable, 1, KeyFrameCount, TargetKeySet, TangentType);
-
-                KeyFrameCount = BitConverter.ToInt16(BTKFile.ReadReverse(0, 2), 0);
-                TargetKeySet = BitConverter.ToInt16(BTKFile.ReadReverse(0, 2), 0);
-                TangentType = BitConverter.ToInt16(BTKFile.ReadReverse(0, 2), 0);
-                Anim.ScaleWFrames = ReadKeyframe(ScaleTable, 1, KeyFrameCount, TargetKeySet, TangentType);
-                KeyFrameCount = BitConverter.ToInt16(BTKFile.ReadReverse(0, 2), 0);
-                TargetKeySet = BitConverter.ToInt16(BTKFile.ReadReverse(0, 2), 0);
-                TangentType = BitConverter.ToInt16(BTKFile.ReadReverse(0, 2), 0);
-                Anim.RotationWFrames = ReadKeyframe(RotationTable, RotationMultiplier, KeyFrameCount, TargetKeySet, TangentType);
-                KeyFrameCount = BitConverter.ToInt16(BTKFile.ReadReverse(0, 2), 0);
-                TargetKeySet = BitConverter.ToInt16(BTKFile.ReadReverse(0, 2), 0);
-                TangentType = BitConverter.ToInt16(BTKFile.ReadReverse(0, 2), 0);
-                Anim.TranslationWFrames = ReadKeyframe(TranslationTable, 1, KeyFrameCount, TargetKeySet, TangentType);
-
-                TextureAnimations.Add(Anim);
-            }
-        }
-
-        private void Write(Stream BTKFile)
-        {
-            string Padding = "Hack.io.BTK © Super Hackio Incorporated 2020";
-
-            BTKFile.WriteString(Magic);
-            BTKFile.Write(new byte[4] { 0xDD, 0xDD, 0xDD, 0xDD }, 0, 4);
-            BTKFile.Write(new byte[4] { 0x00, 0x00, 0x00, 0x01 }, 0, 4);
-            BTKFile.Write(new byte[16] { 0x53, 0x56, 0x52, 0x31, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF }, 0, 16);
-            BTKFile.WriteString(Magic2);
-            BTKFile.Write(new byte[4] { 0xDD, 0xDD, 0xDD, 0xDD }, 0, 4);
-            BTKFile.WriteByte((byte)Loop);
-            BTKFile.WriteByte((byte)RotationMultiplier);
-            BTKFile.WriteReverse(BitConverter.GetBytes(Time), 0, 2);
-            BTKFile.WriteReverse(BitConverter.GetBytes((ushort)(TextureAnimations.Count * 3)), 0, 2);
-            BTKFile.Write(new byte[2] { 0xDD, 0xDD }, 0, 2);
-            BTKFile.Write(new byte[2] { 0xEE, 0xEE }, 0, 2);
-            BTKFile.Write(new byte[2] { 0xFF, 0xFF }, 0, 2);
-            //Animation Table Offset
-            BTKFile.Write(new byte[4] { 0xDD, 0xDD, 0xDD, 0xDD }, 0, 4);
-            //Remap Table Offset
-            BTKFile.Write(new byte[4] { 0xDD, 0xDD, 0xDD, 0xDD }, 0, 4);
-            //Material ST Offset
-            BTKFile.Write(new byte[4] { 0xDD, 0xDD, 0xDD, 0xDD }, 0, 4);
-            //TexMtxTable Offset
-            BTKFile.Write(new byte[4] { 0xDD, 0xDD, 0xDD, 0xDD }, 0, 4);
-            //Center Table Offset
-            BTKFile.Write(new byte[4] { 0xDD, 0xDD, 0xDD, 0xDD }, 0, 4);
-            //Scale Table Offset
-            BTKFile.Write(new byte[4] { 0xDD, 0xDD, 0xDD, 0xDD }, 0, 4);
-            //Rotation Table Offset
-            BTKFile.Write(new byte[4] { 0xDD, 0xDD, 0xDD, 0xDD }, 0, 4);
-            //Translation Table Offset
-            BTKFile.Write(new byte[4] { 0xDD, 0xDD, 0xDD, 0xDD }, 0, 4);
-
-            #region Padding
-            //int PadCount = 0;
-            while (BTKFile.Position < 0x80)
-                BTKFile.WriteByte(0x00);
-            #endregion
-
-            long AnimationTableOffset = BTKFile.Position;
-            for (int i = 0; i < TextureAnimations.Count; i++)
-            {
-                BTKFile.WriteReverse(BitConverter.GetBytes((ushort)TextureAnimations[i].ScaleUFrames.Count), 0, 2);
-                BTKFile.WriteReverse(new byte[2], 0, 2);
-                BTKFile.WriteReverse(BitConverter.GetBytes((ushort)(TextureAnimations[i].ScaleUFrames.Any(S => S.IngoingTangent != S.OutgoingTangent) ? 1 : 1)), 0, 2);
-                BTKFile.WriteReverse(BitConverter.GetBytes((ushort)TextureAnimations[i].RotationUFrames.Count), 0, 2);
-                BTKFile.WriteReverse(new byte[2], 0, 2);
-                BTKFile.WriteReverse(BitConverter.GetBytes((ushort)(TextureAnimations[i].RotationUFrames.Any(S => S.IngoingTangent != S.OutgoingTangent) ? 1 : 1)), 0, 2);
-                BTKFile.WriteReverse(BitConverter.GetBytes((ushort)TextureAnimations[i].TranslationUFrames.Count), 0, 2);
-                BTKFile.WriteReverse(new byte[2], 0, 2);
-                BTKFile.WriteReverse(BitConverter.GetBytes((ushort)(TextureAnimations[i].TranslationUFrames.Any(S => S.IngoingTangent != S.OutgoingTangent) ? 1 : 1)), 0, 2);
-
-                BTKFile.WriteReverse(BitConverter.GetBytes((ushort)TextureAnimations[i].ScaleVFrames.Count), 0, 2);
-                BTKFile.WriteReverse(new byte[2], 0, 2);
-                BTKFile.WriteReverse(BitConverter.GetBytes((ushort)(TextureAnimations[i].ScaleVFrames.Any(S => S.IngoingTangent != S.OutgoingTangent) ? 1 : 1)), 0, 2);
-                BTKFile.WriteReverse(BitConverter.GetBytes((ushort)TextureAnimations[i].RotationVFrames.Count), 0, 2);
-                BTKFile.WriteReverse(new byte[2], 0, 2);
-                BTKFile.WriteReverse(BitConverter.GetBytes((ushort)(TextureAnimations[i].RotationVFrames.Any(S => S.IngoingTangent != S.OutgoingTangent) ? 1 : 1)), 0, 2);
-                BTKFile.WriteReverse(BitConverter.GetBytes((ushort)TextureAnimations[i].TranslationVFrames.Count), 0, 2);
-                BTKFile.WriteReverse(new byte[2], 0, 2);
-                BTKFile.WriteReverse(BitConverter.GetBytes((ushort)(TextureAnimations[i].TranslationVFrames.Any(S => S.IngoingTangent != S.OutgoingTangent) ? 1 : 1)), 0, 2);
-
-                BTKFile.WriteReverse(BitConverter.GetBytes((ushort)TextureAnimations[i].ScaleWFrames.Count), 0, 2);
-                BTKFile.WriteReverse(new byte[2], 0, 2);
-                BTKFile.WriteReverse(BitConverter.GetBytes((ushort)(TextureAnimations[i].ScaleWFrames.Any(S => S.IngoingTangent != S.OutgoingTangent) ? 1 : 1)), 0, 2);
-                BTKFile.WriteReverse(BitConverter.GetBytes((ushort)TextureAnimations[i].RotationWFrames.Count), 0, 2);
-                BTKFile.WriteReverse(new byte[2], 0, 2);
-                BTKFile.WriteReverse(BitConverter.GetBytes((ushort)(TextureAnimations[i].RotationWFrames.Any(S => S.IngoingTangent != S.OutgoingTangent) ? 1 : 1)), 0, 2);
-                BTKFile.WriteReverse(BitConverter.GetBytes((ushort)TextureAnimations[i].TranslationWFrames.Count), 0, 2);
-                BTKFile.WriteReverse(new byte[2], 0, 2);
-                BTKFile.WriteReverse(BitConverter.GetBytes((ushort)(TextureAnimations[i].TranslationWFrames.Any(S => S.IngoingTangent != S.OutgoingTangent) ? 1 : 1)), 0, 2);
-            }
-            #region Padding
-            int PadCount = 0;
-            while (BTKFile.Position % 4 != 0)
-                BTKFile.WriteByte((byte)Padding[PadCount++]);
-            #endregion
-
-            long RemapTableOffset = BTKFile.Position;
-            List<string> strings = new List<string>();
-            for (int i = 0; i < TextureAnimations.Count; i++)
-            {
-                BTKFile.WriteReverse(BitConverter.GetBytes(TextureAnimations[i].RemapIndex), 0, 2);
-                strings.Add(TextureAnimations[i].MaterialName);
-            }
-
-            #region Padding
-            PadCount = 0;
-            while (BTKFile.Position % 4 != 0)
-                BTKFile.WriteByte((byte)Padding[PadCount++]);
-            #endregion
-
-            long StringTableOffset = BTKFile.Position;
-            BTKFile.WriteReverse(BitConverter.GetBytes((ushort)strings.Count), 0, 2);
-            BTKFile.Write(new byte[2] { 0xFF, 0xFF }, 0, 2);
-            ushort stringofffset = (ushort)(4 + (4 * strings.Count));
-            List<byte> bytestrings = new List<byte>();
-            byte[] TexMapID = new byte[TextureAnimations.Count];
-            for (int i = 0; i < TextureAnimations.Count; i++)
-            {
-                BTKFile.WriteReverse(BitConverter.GetBytes(StringToHash(strings[i])), 0, 2);
-                BTKFile.WriteReverse(BitConverter.GetBytes(stringofffset), 0, 2);
-                byte[] currentstring = Encoding.GetEncoding(932).GetBytes(strings[i]);
-                stringofffset += (ushort)(currentstring.Length + 1);
-                bytestrings.AddRange(currentstring);
-                bytestrings.Add(0x00);
-                TexMapID[i] = TextureAnimations[i].MaterialTextureID;
-            }
-            BTKFile.Write(bytestrings.ToArray(), 0, bytestrings.Count);
-
-            #region Padding
-            PadCount = 0;
-            while (BTKFile.Position % 4 != 0)
-                BTKFile.WriteByte((byte)Padding[PadCount++]);
-            #endregion
-
-            long TexMapIDTableOffset = BTKFile.Position;
-            BTKFile.Write(TexMapID, 0, TexMapID.Length);
-
-            #region Padding
-            PadCount = 0;
-            while (BTKFile.Position % 4 != 0)
-                BTKFile.WriteByte((byte)Padding[PadCount++]);
-            #endregion
-
-            long CenterTableOffset = BTKFile.Position;
-            for (int i = 0; i < TextureAnimations.Count; i++)
-            {
-                BTKFile.WriteReverse(BitConverter.GetBytes(TextureAnimations[i].Center[0]), 0, 4);
-                BTKFile.WriteReverse(BitConverter.GetBytes(TextureAnimations[i].Center[1]), 0, 4);
-                BTKFile.WriteReverse(BitConverter.GetBytes(TextureAnimations[i].Center[2]), 0, 4);
-            }
-
-            #region Padding
-            PadCount = 0;
-            while (BTKFile.Position % 4 != 0)
-                BTKFile.WriteByte((byte)Padding[PadCount++]);
-            #endregion
-
-            List<float> ScaleTable = new List<float>();
-            List<short> RotationTable = new List<short>();
-            List<float> TranslationTable = new List<float>();
-
-            for (int i = 0; i < TextureAnimations.Count; i++)
-            {
-                FindMatch(ref ScaleTable, TextureAnimations[i].ScaleUFrames, 1);
-                FindMatch(ref ScaleTable, TextureAnimations[i].ScaleVFrames, 1);
-                FindMatch(ref ScaleTable, TextureAnimations[i].ScaleWFrames, 1);
-                FindMatch(ref RotationTable, TextureAnimations[i].RotationUFrames, RotationMultiplier);
-                FindMatch(ref RotationTable, TextureAnimations[i].RotationVFrames, RotationMultiplier);
-                FindMatch(ref RotationTable, TextureAnimations[i].RotationWFrames, RotationMultiplier);
-                FindMatch(ref TranslationTable, TextureAnimations[i].TranslationUFrames, 1);
-                FindMatch(ref TranslationTable, TextureAnimations[i].TranslationVFrames, 1);
-                FindMatch(ref TranslationTable, TextureAnimations[i].TranslationWFrames, 1);
-            }
-            long ScaleTableOffset = BTKFile.Position;
-            for (int i = 0; i < ScaleTable.Count; i++)
-                BTKFile.WriteReverse(BitConverter.GetBytes(ScaleTable[i]), 0, 4);
-
-            #region Padding
-            PadCount = 0;
-            while (BTKFile.Position % 4 != 0)
-                BTKFile.WriteByte((byte)Padding[PadCount++]);
-            #endregion
-
-            long RotationTableOffset = BTKFile.Position;
-            for (int i = 0; i < RotationTable.Count; i++)
-                BTKFile.WriteReverse(BitConverter.GetBytes(RotationTable[i]), 0, 2);
-
-            #region Padding
-            PadCount = 0;
-            while (BTKFile.Position % 4 != 0)
-                BTKFile.WriteByte((byte)Padding[PadCount++]);
-            #endregion
-
-            long TranslationTableOffset = BTKFile.Position;
-            for (int i = 0; i < TranslationTable.Count; i++)
-                BTKFile.WriteReverse(BitConverter.GetBytes(TranslationTable[i]), 0, 4);
-
-            #region Padding
-            PadCount = 0;
-            while (BTKFile.Position % 32 != 0)
-                BTKFile.WriteByte((byte)Padding[PadCount++]);
-            #endregion
-
-            BTKFile.Position = 0x08;
-            BTKFile.WriteReverse(BitConverter.GetBytes((uint)BTKFile.Length), 0, 4);
-            BTKFile.Position = 0x24;
-            BTKFile.WriteReverse(BitConverter.GetBytes((uint)(BTKFile.Length - 0x20)), 0, 4);
-            BTKFile.Position = 0x2E;
-            BTKFile.WriteReverse(BitConverter.GetBytes((ushort)ScaleTable.Count), 0, 2);
-            BTKFile.WriteReverse(BitConverter.GetBytes((ushort)RotationTable.Count), 0, 2);
-            BTKFile.WriteReverse(BitConverter.GetBytes((ushort)TranslationTable.Count), 0, 2);
-            BTKFile.WriteReverse(BitConverter.GetBytes((uint)(AnimationTableOffset - 0x20)), 0, 4);
-            BTKFile.WriteReverse(BitConverter.GetBytes((uint)(RemapTableOffset - 0x20)), 0, 4);
-            BTKFile.WriteReverse(BitConverter.GetBytes((uint)(StringTableOffset - 0x20)), 0, 4);
-            BTKFile.WriteReverse(BitConverter.GetBytes((uint)(TexMapIDTableOffset - 0x20)), 0, 4);
-            BTKFile.WriteReverse(BitConverter.GetBytes((uint)(CenterTableOffset - 0x20)), 0, 4);
-            BTKFile.WriteReverse(BitConverter.GetBytes((uint)(ScaleTableOffset - 0x20)), 0, 4);
-            BTKFile.WriteReverse(BitConverter.GetBytes((uint)(RotationTableOffset - 0x20)), 0, 4);
-            BTKFile.WriteReverse(BitConverter.GetBytes((uint)(TranslationTableOffset - 0x20)), 0, 4);
-
-            BTKFile.Seek(AnimationTableOffset, SeekOrigin.Begin);
-            for (int i = 0; i < TextureAnimations.Count; i++)
-            {
-                BTKFile.Position += 2;
-                BTKFile.WriteReverse(BitConverter.GetBytes(FindMatch(ref ScaleTable, TextureAnimations[i].ScaleUFrames, 1)), 0, 2);
-                BTKFile.Position += 2;
-
-                BTKFile.Position += 2;
-                BTKFile.WriteReverse(BitConverter.GetBytes(FindMatch(ref RotationTable, TextureAnimations[i].RotationUFrames, RotationMultiplier)), 0, 2);
-                BTKFile.Position += 2;
-
-                BTKFile.Position += 2;
-                BTKFile.WriteReverse(BitConverter.GetBytes(FindMatch(ref TranslationTable, TextureAnimations[i].TranslationUFrames, 1)), 0, 2);
-                BTKFile.Position += 2;
-
-
-                BTKFile.Position += 2;
-                BTKFile.WriteReverse(BitConverter.GetBytes(FindMatch(ref ScaleTable, TextureAnimations[i].ScaleVFrames, 1)), 0, 2);
-                BTKFile.Position += 2;
-
-                BTKFile.Position += 2;
-                BTKFile.WriteReverse(BitConverter.GetBytes(FindMatch(ref RotationTable, TextureAnimations[i].RotationVFrames, RotationMultiplier)), 0, 2);
-                BTKFile.Position += 2;
-
-                BTKFile.Position += 2;
-                BTKFile.WriteReverse(BitConverter.GetBytes(FindMatch(ref TranslationTable, TextureAnimations[i].TranslationVFrames, 1)), 0, 2);
-                BTKFile.Position += 2;
-
-
-                BTKFile.Position += 2;
-                BTKFile.WriteReverse(BitConverter.GetBytes(FindMatch(ref ScaleTable, TextureAnimations[i].ScaleWFrames, 1)), 0, 2);
-                BTKFile.Position += 2;
-
-                BTKFile.Position += 2;
-                BTKFile.WriteReverse(BitConverter.GetBytes(FindMatch(ref RotationTable, TextureAnimations[i].RotationWFrames, RotationMultiplier)), 0, 2);
-                BTKFile.Position += 2;
-
-                BTKFile.Position += 2;
-                BTKFile.WriteReverse(BitConverter.GetBytes(FindMatch(ref TranslationTable, TextureAnimations[i].TranslationWFrames, 1)), 0, 2);
-                BTKFile.Position += 2;
-            }
-        }
-
-        private List<Animation.Keyframe> ReadKeyframe(List<float> Data, float Scale, double Count, double Index, int TangentType)
-        {
-            List<Animation.Keyframe> keyframes = new List<Animation.Keyframe>();
-
-            if (Count == 1)
-                keyframes.Add(new Animation.Keyframe() { Time = 0, Value = Data[(int)Index] * Scale, IngoingTangent = 0, OutgoingTangent = 0 });
-            else
-            {
-                if (TangentType == 0x00)
-                {
-                    for (double i = Index; i < Index + 3 * Count; i += 3)
-                    {
-                        float Tangents = Data[(int)i + 2] * Scale;
-                        keyframes.Add(new Animation.Keyframe() { Time = (ushort)Data[(int)i + 0], Value = Data[(int)i + 1] * Scale, IngoingTangent = Tangents, OutgoingTangent = Tangents });
-                    }
-                }
-                else if (TangentType == 0x01)
-                {
-                    for (double i = Index; i < Index + 4 * Count; i += 4)
-                        keyframes.Add(new Animation.Keyframe() { Time = (ushort)Data[(int)i + 0], Value = Data[(int)i + 1] * Scale, IngoingTangent = Data[(int)i + 2] * Scale, OutgoingTangent = Data[(int)i + 3] * Scale });
-
-                }
-            }
-            return keyframes;
-        }
-
-        private List<Animation.Keyframe> ReadKeyframe(List<short> Data, float Scale, double Count, double Index, int TangentType)
-        {
-            List<Animation.Keyframe> keyframes = new List<Animation.Keyframe>();
-
-            if (Count == 1)
-                keyframes.Add(new Animation.Keyframe() { Time = 0, Value = Data[(int)Index] * Scale, IngoingTangent = 0, OutgoingTangent = 0 });
-            else
-            {
-                if (TangentType == 0x00)
-                {
-                    for (double i = Index; i < Index + 3 * Count; i += 3)
-                    {
-                        float Tangents = Data[(int)i + 2] * Scale;
-                        keyframes.Add(new Animation.Keyframe() { Time = (ushort)Data[(int)i + 0], Value = Data[(int)i + 1] * Scale, IngoingTangent = Tangents, OutgoingTangent = Tangents });
-                    }
-                }
-                else if (TangentType == 0x01)
-                {
-                    for (double i = Index; i < Index + 4 * Count; i += 4)
-                        keyframes.Add(new Animation.Keyframe() { Time = (ushort)Data[(int)i + 0], Value = Data[(int)i + 1] * Scale, IngoingTangent = Data[(int)i + 2] * Scale, OutgoingTangent = Data[(int)i + 3] * Scale });
-
-                }
-            }
-            return keyframes;
-        }
-
-
         /// <summary>
-        /// Generates a 2 byte hash from a string
+        /// The X Origin of Rotation
         /// </summary>
-        /// <param name="Input">string to convert</param>
-        /// <returns>hashed string</returns>
-        static internal ushort StringToHash(string Input)
-        {
-            int Hash = 0;
-            for (int i = 0; i < Input.Length; i++)
-            {
-                Hash *= 3;
-                Hash += Input[i];
-                Hash = 0xFFFF & Hash; //cast to short 
-            }
-
-            return (ushort)Hash;
-        }
-
-        private short FindMatch(ref List<float> FullList, List<Animation.Keyframe> sequence, float scale)
-        {
-            List<float> currentSequence = new List<float>();
-            if (sequence.Count == 1)
-                currentSequence.Add(sequence[0].Value/scale);
-            else
-            {
-                for (int i = 0; i < sequence.Count; i++)
-                {
-                    currentSequence.Add(sequence[i].Time);
-                    currentSequence.Add(sequence[i].Value/scale);
-                    currentSequence.Add(sequence[i].IngoingTangent/scale);
-                    currentSequence.Add(sequence[i].OutgoingTangent/scale);
-                }
-            }
-            if (!FullList.ContainsSubsequence(currentSequence))
-            {
-                FullList.AddRange(currentSequence);
-            }
-
-            return (short)FullList.SubListIndex(0, currentSequence);
-        }
-
-        private short FindMatch(ref List<short> FullList, List<Animation.Keyframe> sequence, float scale)
-        {
-            List<short> currentSequence = new List<short>();
-            if (sequence.Count == 1)
-                currentSequence.Add((short)((ushort)(sequence[0].Value/scale)));
-            else
-            {
-                for (int i = 0; i < sequence.Count; i++)
-                {
-                    currentSequence.Add((short)sequence[i].Time);
-                    currentSequence.Add((short)((ushort)(sequence[i].Value / scale)));
-                    currentSequence.Add((short)((ushort)(sequence[i].IngoingTangent/scale)));
-                    currentSequence.Add((short)((ushort)(sequence[i].OutgoingTangent/scale)));
-                }
-            }
-            if (!FullList.ContainsSubsequence(currentSequence))
-            {
-                FullList.AddRange(currentSequence);
-            }
-
-            return (short)FullList.SubListIndex(0, currentSequence);
-        }
-
-
-        //=====================================================================
-
+        public float CenterU { get => mCenter[0]; set => mCenter[0] = value; }
         /// <summary>
-        /// Cast a BTK to a RARCFile
+        /// The Y Origin of Rotation
         /// </summary>
-        /// <param name="x"></param>
-        public static implicit operator RARC.RARC.File(BTK x)
-        {
-            return new RARC.RARC.File(x.Name, x.Save());
-        }
-
+        public float CenterV { get => mCenter[1]; set => mCenter[1] = value; }
         /// <summary>
-        /// Cast a RARCFile to a BTK
+        /// Not very useful
         /// </summary>
-        /// <param name="x"></param>
-        public static implicit operator BTK(RARC.RARC.File x)
-        {
-            return new BTK((MemoryStream)x, x.Name);
-        }
+        public float CenterW { get => mCenter[2]; set => mCenter[2] = value; }
 
-        //=====================================================================
+        public J3DAnimationTrack ScaleU { get; set; } = new();
+        public J3DAnimationTrack ScaleV { get; set; } = new();
+        public J3DAnimationTrack ScaleW { get; set; } = new();
+        public J3DAnimationTrack RotationU { get; set; } = new();
+        public J3DAnimationTrack RotationV { get; set; } = new();
+        public J3DAnimationTrack RotationW { get; set; } = new();
+        public J3DAnimationTrack TranslationU { get; set; } = new();
+        public J3DAnimationTrack TranslationV { get; set; } = new();
+        public J3DAnimationTrack TranslationW { get; set; } = new();
+
+        private float[] mCenter = new float[3];
+
+        public override string ToString() => $"{MaterialName} - Generator {TextureGeneratorId}";
+
+        public override bool Equals(object? obj) => obj is Animation animation &&
+                   MaterialName == animation.MaterialName &&
+                   TextureGeneratorId == animation.TextureGeneratorId &&
+                   mCenter.SequenceEqual(animation.mCenter) &&
+                   ScaleU.Equals(animation.ScaleU) &&
+                   RotationU.Equals(animation.RotationU) &&
+                   TranslationU.Equals(animation.TranslationU) &&
+                   ScaleV.Equals(animation.ScaleV) &&
+                   RotationV.Equals(animation.RotationV) &&
+                   TranslationV.Equals(animation.TranslationV) &&
+                   ScaleW.Equals(animation.ScaleW) &&
+                   RotationW.Equals(animation.RotationW) &&
+                   TranslationW.Equals(animation.TranslationW);
+
+        public override int GetHashCode()
+        {
+            HashCode hash = new();
+            hash.Add(MaterialName);
+            hash.Add(TextureGeneratorId);
+            hash.Add(CenterU);
+            hash.Add(CenterV);
+            hash.Add(CenterW);
+            hash.Add(ScaleU);
+            hash.Add(RotationU);
+            hash.Add(TranslationU);
+            hash.Add(ScaleV);
+            hash.Add(RotationV);
+            hash.Add(TranslationV);
+            hash.Add(ScaleW);
+            hash.Add(RotationW);
+            hash.Add(TranslationW);
+            return hash.ToHashCode();
+        }
     }
 }

@@ -1,526 +1,518 @@
-﻿using System;
+﻿using Hack.io.Interface;
+using Hack.io.Utility;
 using System.Collections.Generic;
-using System.IO;
-using Hack.io.MSBT;
-using System.Linq;
+using System.Collections.Specialized;
+using System.Diagnostics.CodeAnalysis;
 using System.Text;
-using System.Threading.Tasks;
-using Hack.io.Util;
 
-namespace Hack.io.MSBF
+namespace Hack.io.MSBF;
+
+public class MSBF : ILoadSaveFile
 {
-    public class MSBF
+    public const int LABEL_MAX_LENGTH = 255;
+    /// <inheritdoc cref="Interface.DocGen.DOC_MAGIC"/>
+    public const string MAGIC = "MsgFlwBn";
+    public const string MAGIC_FLW2 = "FLW2";
+    public const string MAGIC_FEN1 = "FEN1";
+    public const string MAGIC_REF1 = "REF1";
+
+    [DisallowNull]
+    public List<EntryNode> Flows = [];
+
+
+    public void Load(Stream Strm)
     {
-        const string Magic = "MsgFlwBn";
-        /// <summary>
-        /// Filename of this MSBF file.
-        /// </summary>
-        public string FileName { get; set; } = null;
+        long FileStart = Strm.Position;
+        FileUtil.ExceptionOnBadMagic(Strm, MAGIC);
+        FileUtil.ExceptionOnMisMatchedBOM(Strm);
+        Strm.Position += 0x03;
+        if (Strm.ReadUInt8() != 0x03)
+            throw new NotImplementedException("MSBF versions other than 3 are currently not supported");
 
-        public MSBT.MSBT TextFile;
-        public List<Node> Nodes = new List<Node>();
-        /// <summary>
-        /// Each condition node will index into this list to find their jumps
-        /// nodes index in pairs of 2, so 0x00, 0x02, 0x04, etc.
-        /// </summary>
-        public List<ushort> ConditionJumpNodes = new List<ushort>();
-        
-        /// <summary>
-        /// File Identifier
-        /// </summary>
-        public MSBF(string file)
-        {
-            FileStream MSBFFile = new FileStream(file, FileMode.Open);
-            Read(MSBFFile);
-            MSBFFile.Close();
-            FileName = file;
-        }
-        public MSBF(Stream MSBFFile) => Read(MSBFFile);
+        ushort SectionCount = Strm.ReadUInt16();
+        Strm.Position += 0x02;
+        uint FileSize = Strm.ReadUInt32();
+        Strm.Position += 0x0A;
 
-        public void Save(string file)
+        Dictionary<int, string> TemporaryLabelStorage = [];
+        List<NodeBase> TemporaryNodes = [];
+        List<ushort> TemporaryBranchIndicies = [];
+
+        for (int i = 0; i < SectionCount; i++)
         {
-            FileStream MSBFFile = new FileStream(file, FileMode.Create);
-            Write(MSBFFile);
-            MSBFFile.Close();
-            FileName = file;
-        }
-        public MemoryStream Save()
-        {
-            MemoryStream ms = new MemoryStream();
-            Write(ms);
-            return ms;
+            long ChunkStart = Strm.Position;
+            string Header = Strm.ReadString(4, Encoding.ASCII);
+            uint ChunkSize = Strm.ReadUInt32();
+            Strm.Position += 0x08;
+
+            if (Header.Equals(MAGIC_FLW2))
+                ReadFLW2();
+            if (Header.Equals(MAGIC_FEN1))
+                ReadFEN1();
+            if (Header.Equals(MAGIC_REF1))
+                ReadREF1();
+
+            Strm.Position = ChunkStart + 0x10 + ChunkSize;
+            if (ChunkSize % 16 > 0)
+                Strm.Position += (16 - (ChunkSize % 16));
         }
 
-        private void Read(Stream MSBFFile)
+        for (int i = 0; i < TemporaryNodes.Count; i++)
         {
-            if (!MSBFFile.ReadString(0x8).Equals(Magic))
-                throw new Exception($"Invalid Identifier. Expected \"{Magic}\"");
+            NodeBase Current = TemporaryNodes[i];
 
-            MSBFFile.Position += 0x18;
-
-            List<(string MSBTTag, uint NodeIndex)> FlowMSBTHookNames = new List<(string MSBTTag, uint NodeIndex)>();
-            while (MSBFFile.Position < MSBFFile.Length)
+            if (Current is EntryNode Entry)
             {
-                string CurrentSectionMagic = MSBFFile.ReadString(4);
+                if (TemporaryLabelStorage.TryGetValue(i, out string? Label))
+                    Entry.Label = Label;
+                else
+                    throw new KeyNotFoundException($"Failed to find a Label for node {i}");
 
-                switch (CurrentSectionMagic)
-                {
-                    case "FLW2":
-                        ReadFLW2(MSBFFile);
-                        break;
-                    case "FEN1":
-                        ReadFEN1(MSBFFile, ref FlowMSBTHookNames);
-                        break;
-                    default:
-                        throw new Exception($"{CurrentSectionMagic} section found, but this is not supported.");
-                }
+                Flows.Add(Entry);
+                Entry.NextNode = GetNodeAtIndex(Entry.Argument1);
+                continue;
             }
 
-            for (int i = 0; i < FlowMSBTHookNames.Count; i++)
+            if (Current is MessageNode Message)
             {
-                if (Nodes[(int)FlowMSBTHookNames[i].NodeIndex] is EntryNode EN)
-                {
-                    EN.MSBTEntryTag = FlowMSBTHookNames[i].MSBTTag;
-                }
+                Message.NextNode = GetNodeAtIndex(Message.Argument3);
+                continue;
+            }
+
+            if (Current is BranchNode Branch)
+            {
+                Branch.NextNode = GetNodeAtIndex(TemporaryBranchIndicies[Branch.Argument4]);
+                Branch.NextNodeElse = GetNodeAtIndex(TemporaryBranchIndicies[Branch.Argument4+1]);
+                continue;
+            }
+
+            if (Current is EventNode Event)
+            {
+                Event.NextNode = GetNodeAtIndex(Event.Argument2);
+                continue;
             }
         }
 
-        private void Write(Stream MSBFFile)
+        Strm.Position = FileStart + FileSize;
+
+        NodeBase? GetNodeAtIndex(ushort index)
         {
-            MSBFFile.WriteString(Magic);
-            MSBFFile.Write(new byte[2] { 0xFE, 0xFF }, 0, 2);
-            MSBFFile.Write(new byte[4] { 0x00, 0x00, 0x00, 0x03 }, 0, 4);
-            MSBFFile.Write(new byte[2] { 000, 0x02 }, 0, 2); //2 sections
-            MSBFFile.Write(new byte[2], 0, 2); //Padding
-            MSBFFile.Write(new byte[4] { 0xDD, 0xDD, 0xDD, 0xDD }, 0, 4); //Size placeholder
-            MSBFFile.Write(new byte[10], 0, 10); //More padding
-
-            //FLW2 section
-            long FLW2Start = MSBFFile.Position;
-            MSBFFile.WriteString("FLW2");
-            MSBFFile.Write(new byte[4] { 0xDD, 0xDD, 0xDD, 0xDD }, 0, 4); //Size placeholder
-            MSBFFile.Write(new byte[8], 0, 8); //padding
-            MSBFFile.WriteReverse(BitConverter.GetBytes((ushort)Nodes.Count), 0, 2);
-            MSBFFile.WriteReverse(BitConverter.GetBytes((ushort)ConditionJumpNodes.Count), 0, 2); //usually (ConditionNodeCount * 2) * 4
-            MSBFFile.Write(new byte[4], 0, 4); //padding to the 8th most likely
-
-            //TODO: Make everything reference based
-            for (int i = 0; i < Nodes.Count; i++)
-            {
-                Nodes[i].Write(MSBFFile);
-            }
-            for (int i = 0; i < ConditionJumpNodes.Count; i++)
-            {
-                MSBFFile.WriteReverse(BitConverter.GetBytes(ConditionJumpNodes[i]), 0, 2);
-            }
-            long FLW2End = MSBFFile.Position;
-            MSBFFile.PadTo(16, 0xAB);
-
-            //Fen1 time
-            //Flow Entry section
-            long FEN1Start = MSBFFile.Position;
-            MSBFFile.WriteString("FEN1");
-            MSBFFile.Write(new byte[4] { 0xDD, 0xDD, 0xDD, 0xDD }, 0, 4); //Size placeholder
-            MSBFFile.Write(new byte[8], 0, 8); //padding
-
-            //Always 59 for some reason
-            uint GroupCount = 59;
-            MSBFFile.WriteReverse(BitConverter.GetBytes(GroupCount), 0, 4);
-
-            //Lets collect all the unique entries
-            //No two initilizer nodes can have the same MSBTTag
-            List<(uint Hash, uint Offset)> Groups = new List<(uint, uint)>();
-            List<byte> WrittenLabels = new List<byte>();
-            MakeGroups(GroupCount, ref Groups, ref WrittenLabels, out uint FinalOffset);
-
-            //Groups = Groups.OrderBy(A => A.Hash).ToList();
-
-            int ActualDataCount = 0;
-            for (int i = 0; i < Groups.Count; i++)
-            {
-                var HashCount = Groups.Where(a => a.Hash.Equals(Groups[i].Hash)).Count();
-                uint hashdiff = Groups[i].Hash;
-                if (i == 0)
-                    goto FirstTimeSkip;
-
-                hashdiff = Groups[i].Hash - Groups[i - 1].Hash;
-                if ((hashdiff == 0) && ((Groups.Count - 1) != i) && (Groups[i + 1].Hash - Groups[i].Hash == 0))
-                    continue;
-
-                FirstTimeSkip:
-                int LoopCountChange = 0;
-                int BranchDataChenge = -1;
-                if (i == 0)
-                {
-                    LoopCountChange = 1;
-                    BranchDataChenge = 0;
-                }
-                for (int j = 0; j < (hashdiff + LoopCountChange); j++)
-                {
-                    MSBFFile.WriteReverse((j == hashdiff + BranchDataChenge) ? BitConverter.GetBytes(HashCount) : new byte[4], 0, 4);
-                    MSBFFile.WriteReverse(BitConverter.GetBytes(Groups[i].Offset), 0, 4);
-                    ActualDataCount++;
-                }
-            }
-            //Fill out the rest of the empty data
-            if (ActualDataCount < GroupCount)
-                for (int i = 0; i < GroupCount - ActualDataCount; i++)
-                {
-                    MSBFFile.WriteReverse(new byte[4], 0, 4);
-                    MSBFFile.WriteReverse(BitConverter.GetBytes(FinalOffset), 0, 4);
-                }
-
-            MSBFFile.Write(WrittenLabels.ToArray(), 0, WrittenLabels.Count);
-            long FEN1End = MSBFFile.Position;
-            MSBFFile.PadTo(16, 0xAB);
-
-            //DON'T FORGET TO WRITE THE SECTION SIZES!!!
-            MSBFFile.Position = 0x12;
-            MSBFFile.WriteReverse(BitConverter.GetBytes((int)MSBFFile.Length), 0, 4);
-            MSBFFile.Position = FLW2Start + 0x04;
-            MSBFFile.WriteReverse(BitConverter.GetBytes((int)(FLW2End - (FLW2Start + 0x10))), 0, 4);
-            MSBFFile.Position = FEN1Start + 0x04;
-            MSBFFile.WriteReverse(BitConverter.GetBytes((int)(FEN1End - (FEN1Start + 0x10))), 0, 4);
+            if (index == 0xFFFF)
+                return null;
+            return TemporaryNodes[index];
         }
 
-        private void ReadFLW2(Stream MSBFFile)
+        void ReadFLW2()
         {
-            uint SectionSize = BitConverter.ToUInt32(MSBFFile.ReadReverse(0, 4), 0);
-            MSBFFile.Position += 0x08; //padding
-
-            ushort NodeCount = BitConverter.ToUInt16(MSBFFile.ReadReverse(0, 2), 0);
-            ushort NodePairCount = BitConverter.ToUInt16(MSBFFile.ReadReverse(0, 2), 0);
-            MSBFFile.Position += 0x04; //I believe this is technically padding to the 0x08, but in reality, it's always the same address, and thus, the same size
+            long ChunkStart = Strm.Position;
+            ushort NodeCount = Strm.ReadUInt16();
+            ushort IndexCount = Strm.ReadUInt16();
+            Strm.Position += 0x04;
 
             for (int i = 0; i < NodeCount; i++)
             {
-                NodeType type = (NodeType)BitConverter.ToUInt16(MSBFFile.ReadReverse(0, 2), 0);
-
-                switch (type)
+                NodeType Type = Strm.ReadEnum<NodeType, ushort>(StreamUtil.ReadUInt16);
+                NodeBase Current = Type switch
                 {
-                    case NodeType.MESSAGE:
-                        Nodes.Add(new MessageNode(MSBFFile));
-                        Nodes[Nodes.Count - 1].Parent = this;
-                        break;
-                    case NodeType.ENTRY:
-                        Nodes.Add(new EntryNode(MSBFFile));
-                        Nodes[Nodes.Count - 1].Parent = this;
-                        break;
-                    case NodeType.EVENT:
-                        Nodes.Add(new EventNode(MSBFFile));
-                        Nodes[Nodes.Count - 1].Parent = this;
-                        break;
-                    case NodeType.BRANCH:
-                        Nodes.Add(new BranchNode(MSBFFile));
-                        Nodes[Nodes.Count - 1].Parent = this;
-                        break;
-                    default:
-                        throw new Exception($"Unsupported NodeType: {(int)type}");
-                }
+                    NodeType.MESSAGE => new MessageNode(),
+                    NodeType.BRANCH => new BranchNode(),
+                    NodeType.EVENT => new EventNode(),
+                    NodeType.ENTRY => new EntryNode(),
+                    _ => throw new InvalidOperationException($"Invalid node {Type}"),
+                };
+                Current.Load(Strm);
+                TemporaryNodes.Add(Current);
             }
 
-            for (int i = 0; i < NodePairCount; i++)
-            {
-                ConditionJumpNodes.Add(BitConverter.ToUInt16(MSBFFile.ReadReverse(0, 2), 0));
-            }
-
-            while (MSBFFile.Position % 0x10 != 0)
-                MSBFFile.Position++;
+            TemporaryBranchIndicies.AddRange(Strm.ReadMultiUInt16(IndexCount));
         }
 
-        /// <summary>
-        /// FEN1 = Flow Entry (most likely0
-        /// </summary>
-        /// <param name="MSBFFile"></param>
-        private void ReadFEN1(Stream MSBFFile, ref List<(string MSBTTag, uint NodeIndex)> mEntries)
+        void ReadFEN1()
         {
-            List<(uint Hash, uint OfMSBFFileet)> Groups = new List<(uint Hash, uint OfMSBFFileet)>();
-            int size = BitConverter.ToInt32(MSBFFile.ReadReverse(0, 4), 0);
-            MSBFFile.Position += 0x08;
-            long LabelStart = MSBFFile.Position;
-            uint GroupCount = BitConverter.ToUInt32(MSBFFile.ReadReverse(0, 4), 0);
-            for (int y = 0; y < GroupCount; y++)
-            {
-                Groups.Add((BitConverter.ToUInt32(MSBFFile.ReadReverse(0, 4), 0), BitConverter.ToUInt32(MSBFFile.ReadReverse(0, 4), 0)));
-            }
+            long ChunkStart = Strm.Position;
+            uint Count = Strm.ReadUInt32();
+            long BucketStart = Strm.Position;
 
-            foreach ((uint, uint) grp in Groups)
+            for (uint i = 0; i < Count; i++)
             {
-                MSBFFile.Position = LabelStart + grp.Item2;
-                Console.WriteLine("Group ID: " + (uint)Groups.IndexOf(grp));
-                for (int z = 0; z < grp.Item1; z++)
+                Strm.Position = BucketStart + (i * 8);
+                int EntryCount = Strm.ReadInt32();
+                uint Offset = Strm.ReadUInt32();
+                Strm.Position = ChunkStart + Offset;
+
+                for (int l = 0; l < EntryCount; l++)
                 {
-                    uint length = Convert.ToUInt32(MSBFFile.ReadByte());
-                    string Name = MSBFFile.ReadString((int)length);
-                    uint Index = BitConverter.ToUInt32(MSBFFile.ReadReverse(0, 4), 0);
-                    uint Checksum = (uint)Groups.IndexOf(grp);
-
-                    mEntries.Add((Name, Index));
-
-                    Console.WriteLine("Label: " + Name);
+                    byte length = Strm.ReadUInt8();
+                    string label = Strm.ReadString(length, Encoding.ASCII);
+                    int Index = Strm.ReadInt32();
+                    TemporaryLabelStorage.Add(Index, label);
                 }
-                Console.WriteLine();
-            }
-
-            MSBFFile.Position = LabelStart + size;
-
-            while (MSBFFile.Position % 0x10 != 0)
-                MSBFFile.Position++;
-        }
-
-        private void MakeGroups(uint GroupCount, ref List<(uint, uint)> Groups, ref List<byte> LabelData, out uint FinalOffset)
-        {
-            uint Offset = 4 + (8 * GroupCount);
-
-            List<(uint Hash, EntryNode Node)> SortingGroups = new List<(uint Hash, EntryNode Node)>();
-            for (int i = 0; i < Nodes.Count; i++)
-            {
-                if (Nodes[i] is EntryNode EN)
-                {
-                    SortingGroups.Add((LabelChecksum(EN.MSBTEntryTag, GroupCount), EN));
-                }
-            }
-            SortingGroups = SortingGroups.OrderBy(EN => EN.Hash).ToList();
-            for (int i = 0; i < SortingGroups.Count; i++)
-            {
-                Groups.Add((SortingGroups[i].Hash, Offset));
-                Offset += (uint)(SortingGroups[i].Node.MSBTEntryTag.Length + 1 + 4);
-                LabelData.Add((byte)SortingGroups[i].Node.MSBTEntryTag.Length);
-                LabelData.AddRange(Encoding.UTF8.GetBytes(SortingGroups[i].Node.MSBTEntryTag));
-                LabelData.AddRange(BitConverter.GetBytes(Nodes.IndexOf(SortingGroups[i].Node)).Reverse());
-            }
-            FinalOffset = Offset;
-        }
-        /// <summary>
-        /// Same as MSBT
-        /// </summary>
-        /// <param name="label"></param>
-        /// <param name="GroupCount"></param>
-        /// <returns></returns>
-        private uint LabelChecksum(string label, uint GroupCount)
-        {
-            uint hash = 0;
-            foreach (char c in label)
-            {
-                hash *= 0x492;
-                hash += c;
-            }
-            return (hash & 0xFFFFFFFF) % GroupCount;
-        }
-
-        public abstract class Node
-        {
-            public abstract NodeType Type { get; }
-            protected ushort[] Data = new ushort[5];
-            public MSBF Parent;
-
-            public Node(Stream MSBFFile)
-            {
-                //Don't read the type byte here
-                for (int i = 0; i < 5; i++)
-                {
-                    Data[i] = BitConverter.ToUInt16(MSBFFile.ReadReverse(0, 2), 0);
-                }
-            }
-
-            public void Write(Stream MSBFFile)
-            {
-                MSBFFile.WriteReverse(BitConverter.GetBytes((ushort)Type), 0, 2);
-                for (int i = 0; i < 5; i++)
-                {
-                    MSBFFile.WriteReverse(BitConverter.GetBytes(Data[i]), 0, 2);
-                }
-            }
-
-            public override string ToString() => "Invalid";
-        }
-
-        public sealed class MessageNode : Node
-        {
-            public override NodeType Type => NodeType.MESSAGE;
-            public ushort GroupID
-            {
-                get => Data[1];
-                set => Data[1] = value;
-            }
-            public ushort MessageID
-            {
-                get => Data[2];
-                set => Data[2] = value;
-            }
-            public MSBT.MSBT.Label Message
-            {
-                get
-                {
-                    if (Parent is null || Parent.TextFile is null)
-                        return null;
-
-                    return Parent.TextFile.GetSortedLabels[MessageID];
-                }
-            }
-            public ushort NextNodeID
-            {
-                get => Data[3];
-                set => Data[3] = value;
-            }
-            public Node NextNode
-            {
-                get
-                {
-                    if (Parent is null || NextNodeID == 0xFFFF)
-                        return null;
-
-                    return Parent.Nodes[NextNodeID];
-                }
-            }
-
-            public MessageNode(Stream MSBFFile) : base(MSBFFile) { }
-
-            public override string ToString() => $"Message Node: {MessageID} ({GroupID})";
-        }
-
-        public sealed class BranchNode : Node
-        {
-            public override NodeType Type => NodeType.BRANCH;
-            /// <summary>
-            /// Likely Padding, or possibly the amount of condition jump nodes to use
-            /// </summary>
-            public ushort Unknown
-            {
-                get => Data[1];
-                set => Data[1] = value;
-            }
-            /// <summary>
-            /// The condition type
-            /// </summary>
-            public ushort Condition
-            {
-                get => Data[2];
-                set => Data[2] = value;
-            }
-            /// <summary>
-            /// Depends on what the condition is
-            /// </summary>
-            public ushort ConditionParameter
-            {
-                get => Data[3];
-                set => Data[3] = value;
-            }
-            /// <summary>
-            /// True is always the number pointed to by this number. False is always this+1
-            /// </summary>
-            public ushort JumpNodeIndex
-            {
-                get => Data[4];
-                set => Data[4] = value;
-            }
-            public Node SuccessNode
-            {
-                get
-                {
-                    if (Parent is null)
-                        return null;
-
-                    return Parent.Nodes[Parent.ConditionJumpNodes[JumpNodeIndex]];
-                }
-            }
-            public Node FailureNode
-            {
-                get
-                {
-                    if (Parent is null)
-                        return null;
-                    return Parent.Nodes[Parent.ConditionJumpNodes[JumpNodeIndex+1]];
-                }
-            }
-
-            public BranchNode(Stream MSBFFile) : base(MSBFFile)
-            {
-            }
-
-            public override string ToString() => $"Branch Node: {Condition}({ConditionParameter})";
-        }
-
-        public sealed class EventNode : Node
-        {
-            public override NodeType Type => NodeType.EVENT;
-            /// <summary>
-            /// The Event ID.
-            /// </summary>
-            public ushort Event
-            {
-                get => Data[1];
-                set => Data[1] = value;
-            }
-            public ushort NextNodeID
-            {
-                get => Data[2];
-                set => Data[2] = value;
-            }
-            public ushort EventParameter
-            {
-                get => Data[4];
-                set => Data[4] = value;
-            }
-
-            public EventNode(Stream MSBFFile) : base(MSBFFile) { }
-
-            public override string ToString()
-            {
-                return $"Event Node: {Event}({EventParameter})";
             }
         }
 
-        public sealed class EntryNode : Node
+        void ReadREF1()
         {
-            public string MSBTEntryTag { get; set; }
-            public override NodeType Type => NodeType.ENTRY;
-            public ushort NextNodeID
-            {
-                get => Data[1];
-                set => Data[1] = value;
-            }
-            public Node NextNode
-            {
-                get
-                {
-                    if (Parent is null)
-                        return null;
-
-                    return Parent.Nodes[NextNodeID];
-                }
-            }
-
-            public EntryNode(Stream MSBFFile) : base(MSBFFile) { }
-
-            public override string ToString() => $"Flow Entry: {MSBTEntryTag} -> {NextNodeID}";
-        }
-
-        //=====================================================================
-
-        /// <summary>
-        /// Cast a MSBF to a ArchiveFile
-        /// </summary>
-        /// <param name="x"></param>
-        public static implicit operator ArchiveFile(MSBF x) => new ArchiveFile(x.FileName, x.Save());
-
-        /// <summary>
-        /// Cast a ArchiveFile to a MSBF
-        /// </summary>
-        /// <param name="x"></param>
-        public static implicit operator MSBF(ArchiveFile x) => new MSBF((MemoryStream)x) { FileName = x.Name };
-
-        //=====================================================================
-
-        /// <summary>
-        /// An Enum for all the node types.
-        /// </summary>
-        public enum NodeType : ushort
-        {
-            MESSAGE = 1,
-            BRANCH = 2,
-            EVENT = 3,
-            ENTRY = 4
+            long ChunkStart = Strm.Position;
+            throw new NotImplementedException("Send the file with REF1 to SuperHackio on Github");
         }
     }
+
+    public void Save(Stream Strm)
+    {
+        long FileStart = Strm.Position;
+        List<NodeBase> TemporaryNodes = [];
+        List<ushort> TemporaryBranchIndicies = [];
+
+        Strm.WriteString(MAGIC, Encoding.ASCII, null);
+        Strm.WriteUInt16(0xFEFF);
+        Strm.Write(CollectionUtil.InitilizeArray<byte>(0, 3));
+        Strm.WriteUInt8(3); //Version
+        Strm.WritePlaceholder(2); //Section Count
+        Strm.WriteUInt16(0);
+        Strm.WritePlaceholder(4); //Filesize
+        Strm.Write(CollectionUtil.InitilizeArray<byte>(0, 0x0A));
+
+        WriteFLW2();
+        WriteFEN1();
+        long FileEnd = Strm.Position;
+
+        Strm.Position = FileStart + 0x0E;
+        Strm.WriteUInt16(2);
+        Strm.Position += 0x02;
+        Strm.WriteUInt32((uint)(FileEnd - FileStart));
+
+        void WriteFLW2()
+        {
+            GetFlattenedNodes(ref TemporaryNodes);
+
+            long ChunkStart = Strm.Position;
+            Strm.WriteString(MAGIC_FLW2, Encoding.ASCII, null);
+            Strm.WritePlaceholder(4); //Size
+            Strm.Write(CollectionUtil.InitilizeArray<byte>(0, 0x08));
+            Strm.WriteUInt16((ushort)TemporaryNodes.Count);
+            long IndexPosition = Strm.Position;
+            Strm.WritePlaceholder(2); //Index count
+            Strm.Write(CollectionUtil.InitilizeArray<byte>(0, 0x04));
+
+            for (int i = 0; i < TemporaryNodes.Count; i++)
+            {
+                NodeBase Current = TemporaryNodes[i];
+
+                if (Current is EntryNode Entry)
+                {
+                    Entry.Argument1 = GetNodeIndex(Entry.NextNode);
+                }
+
+                if (Current is MessageNode Message)
+                {
+                    Message.Argument3 = GetNodeIndex(Message.NextNode);
+                }
+
+                if (Current is BranchNode Branch)
+                {
+                    Branch.Argument4 = (ushort)TemporaryBranchIndicies.Count;
+                    TemporaryBranchIndicies.Add(GetNodeIndex(Branch.NextNode));
+                    TemporaryBranchIndicies.Add(GetNodeIndex(Branch.NextNodeElse));
+                }
+
+                if (Current is EventNode Event)
+                {
+                    Event.Argument2 = GetNodeIndex(Event.NextNode);
+                }
+
+                Strm.WriteEnum<NodeType, ushort>(Current.Type, StreamUtil.WriteUInt16);
+                Current.Save(Strm);
+            }
+
+            for (int i = 0; i < TemporaryBranchIndicies.Count; i++)
+                Strm.WriteUInt16(TemporaryBranchIndicies[i]);
+
+            long PausePosition = Strm.Position;
+            Strm.Position = ChunkStart + 0x04;
+            Strm.WriteUInt32((uint)(PausePosition - ChunkStart - 0x10));
+            Strm.Position = IndexPosition;
+            Strm.WriteUInt16((ushort)TemporaryBranchIndicies.Count);
+
+            Strm.Position = PausePosition;
+            Strm.PadTo(16, 0xAB);
+
+            ushort GetNodeIndex(NodeBase node)
+            {
+                if (node is null)
+                    return 0xFFFF;
+                return (ushort)TemporaryNodes.IndexOf(node);
+            }
+        }
+
+        void WriteFEN1()
+        {
+            ushort BucketCount = 59; //Fixed bucket size in SMG2
+
+            List<(int index, string Label)> TemporaryLabels = [];
+            for (int i = 0; i < Flows.Count; i++)
+                TemporaryLabels.Add((TemporaryNodes.IndexOf(Flows[i]), Flows[i].Label));
+
+            List<List<(byte[] Label, int Id)>> Buckets = [];
+            for (int i = 0; i < BucketCount; i++)
+                Buckets.Add([]);
+
+            long ChunkStart = Strm.Position;
+            Strm.WriteString(MAGIC_FEN1, Encoding.ASCII, null);
+            Strm.WritePlaceholder(4);
+            Strm.Write(CollectionUtil.InitilizeArray<byte>(0, 0x08));
+
+            Strm.WriteUInt32(BucketCount);
+            for (int i = 0; i < TemporaryLabels.Count; i++)
+            {
+                byte[] x = Encoding.ASCII.GetBytes(TemporaryLabels[i].Label);
+                //List<byte> xx = new();
+                //xx.AddRange(x);
+                //xx.Add(0);
+                //x = xx.ToArray();
+                int Index = CalcBucket(x);
+                Buckets[Index].Add((x, TemporaryLabels[i].index));
+            }
+
+
+            uint LabelOffset = (uint)(4 + (BucketCount * 8));
+
+            foreach (List<(byte[] Label, int Id)> Bucket in Buckets)
+            {
+                Strm.WriteUInt32((uint)Bucket.Count);
+                Strm.WriteUInt32(LabelOffset);
+                long PausePosition = Strm.Position;
+
+                Strm.Position = (ChunkStart + 0x10) + LabelOffset;
+                for (int i = 0; i < Bucket.Count; i++)
+                {
+                    Strm.WriteUInt8((byte)Bucket[i].Label.Length);
+                    Strm.Write(Bucket[i].Label);
+                    Strm.WriteUInt32((uint)Bucket[i].Id);
+                }
+
+                LabelOffset = (uint)(Strm.Position - (ChunkStart + 0x10));
+                Strm.Position = PausePosition;
+            }
+
+            Strm.Seek(0, SeekOrigin.End);
+            long PausePositionJr = Strm.Position;
+            Strm.Position = ChunkStart + 0x04;
+            Strm.WriteUInt32((uint)(PausePositionJr - ChunkStart));
+
+            Strm.Position = PausePositionJr;
+            Strm.PadTo(16, 0xAB);
+
+            int CalcBucket(byte[] encoded)
+            {
+                long hsh = 0;
+                foreach (byte b in encoded)
+                    hsh = (hsh * 0x492 + b) & 0xFFFFFFFF;
+                return (int)(hsh % BucketCount);
+            }
+        }
+    }
+
+    public void GetFlattenedNodes(ref List<NodeBase> TemporaryNodes)
+    {
+        foreach (EntryNode item in Flows)
+            FlattenNode(item, ref TemporaryNodes);
+    }
+
+    private static void FlattenNode(NodeBase Node, ref List<NodeBase> TemporaryNodes)
+    {
+        if (!TemporaryNodes.Contains(Node))
+            TemporaryNodes.Add(Node);
+
+        if (Node.NextNode is not null && !TemporaryNodes.Contains(Node.NextNode))
+            FlattenNode(Node.NextNode, ref TemporaryNodes);
+
+        if (Node is BranchNode BN && BN.NextNodeElse is not null && !TemporaryNodes.Contains(BN.NextNodeElse))
+            FlattenNode(BN.NextNodeElse, ref TemporaryNodes);
+    }
+
+    public abstract class NodeBase : ILoadSaveFile
+    {
+        public const int ARGUMENT_COUNT = 5;
+        public abstract NodeType Type { get; }
+        [AllowNull]
+        public NodeBase NextNode { get; set; }
+        protected ushort[] Data = new ushort[ARGUMENT_COUNT];
+
+        public ushort Argument0
+        {
+            get => Data[0];
+            set => Data[0] = value;
+        }
+        public ushort Argument1
+        {
+            get => Data[1];
+            set => Data[1] = value;
+        }
+        public ushort Argument2
+        {
+            get => Data[2];
+            set => Data[2] = value;
+        }
+        public ushort Argument3
+        {
+            get => Data[3];
+            set => Data[3] = value;
+        }
+        public ushort Argument4
+        {
+            get => Data[4];
+            set => Data[4] = value;
+        }
+
+        public void Load(Stream Strm) => Data = Strm.ReadMultiUInt16(ARGUMENT_COUNT);
+        public void Save(Stream Strm) => Strm.WriteMultiUInt16(Data);
+    }
+
+    public sealed class MessageNode : NodeBase
+    {
+        public override NodeType Type => NodeType.MESSAGE;
+
+        public ushort MessageIndex
+        {
+            get => Argument2;
+            set => Argument2 = value;
+        }
+
+        public MessageNode() : base()
+        {
+            Argument1 = 0x88;
+            Argument2 = 0xFFFF;
+            Argument3 = 0xFFFF;
+        }
+    }
+
+    public sealed class BranchNode : NodeBase
+    {
+        public override NodeType Type => NodeType.BRANCH;
+        [AllowNull]
+        public NodeBase NextNodeElse { get; set; }
+
+        public Conditions BranchCondition
+        {
+            get => (Conditions)Argument2;
+            set => Argument2 = (ushort)value;
+        }
+
+        public ushort Parameter
+        {
+            get => Argument3;
+            set => Argument3 = value;
+        }
+
+        public BranchNode()
+        {
+            Argument1 = 2;
+        }
+    }
+
+    public sealed class EventNode : NodeBase
+    {
+        public override NodeType Type => NodeType.EVENT;
+
+        public Events EventType
+        {
+            get => (Events)Argument1;
+            set => Argument1 = (ushort)value;
+        }
+
+        public ushort Parameter
+        {
+            get => Argument4;
+            set => Argument4 = value;
+        }
+
+        public EventNode()
+        {
+            Argument2 = 0xFFFF;
+        }
+    }
+
+    public sealed class EntryNode : NodeBase
+    {
+        public override NodeType Type => NodeType.ENTRY;
+
+        private string mLabel = "";
+        public string Label
+        {
+            get => mLabel;
+            set
+            {
+                if (value.Length > LABEL_MAX_LENGTH)
+                    throw new OutOfMemoryException($"The label \"{value}\" exceeds the {LABEL_MAX_LENGTH} character limit");
+                mLabel = value;
+            }
+        }
+
+        public EntryNode() : base()
+        {
+            Argument1 = 0xFFFF;
+        }
+    }
+
+
+    /// <summary>
+    /// An Enum for all the node types.
+    /// </summary>
+    public enum NodeType : ushort
+    {
+        MESSAGE = 1,
+        BRANCH = 2,
+        EVENT = 3,
+        ENTRY = 4
+    }
+
+
+    public enum Conditions : ushort
+    {
+        YesNoResult = 0,
+        BranchFunc = 1,
+        PlayerDistance = 2,
+        SW_A = 3,
+        SW_B = 4,
+        PlayerMode_Normal = 5,
+        PlayerMode_Bee = 6,
+        PlayerMode_Boo = 7,
+        PowerStarAppeared = 8,
+        IsLuigi = 9,
+        IsInDemo = 10,
+        MessageAlreadyReadFlag = 11,
+        _120StarEnding = 12,
+        UNKNOWN_0x0D = 13,
+        PlayerMode_Yoshi = 14,
+        PlayerMode_Cloud = 15,
+        PlayerMode_Rock = 16
+    }
+
+    public static bool IsUseParameter(Conditions condition) => condition switch
+    {
+        Conditions.YesNoResult or Conditions.BranchFunc => true,
+        _ => false,
+    };
+
+    public enum Events
+    {
+        EventFunc,
+        EventFunc_,
+        ChainToNextNode,
+        ForwardFlow,
+        AnimeFunc,
+        ON_SW_A,
+        ON_SW_B,
+        KillFunc,
+        OFF_SW_A,
+        OFF_SW_B,
+        HideBubblePointer,
+        ShowBubblePointer,
+    }
+
+    public static bool IsUseParameter(Events Event) => Event switch
+    {
+        Events.EventFunc or Events.EventFunc_ or Events.AnimeFunc or Events.KillFunc => true,
+        _ => false,
+    };
 }

@@ -1,341 +1,158 @@
-﻿using Hack.io.Util;
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
+﻿using Hack.io.Interface;
+using Hack.io.J3D;
+using Hack.io.Utility;
 using System.Text;
-using static Hack.io.J3D.J3DGraph;
+using static Hack.io.BTP.BTP;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
-namespace Hack.io.BTP
+namespace Hack.io.BTP;
+
+public class BTP : J3DAnimationBase<Animation>, ILoadSaveFile
 {
-    /// <summary>
-    /// Binary Texture Pattern
-    /// </summary>
-    public class BTP
+    /// <inheritdoc cref="Interface.DocGen.DOC_MAGIC"/>
+    public const string MAGIC = "J3D1btp1";
+    /// <inheritdoc cref="J3D.DocGen.COMMON_CHUNKMAGIC"/>
+    public const string CHUNKMAGIC = "TPT1";
+
+    public void Load(Stream Strm)
     {
-        /// <summary>
-        /// Filename of this BTP file.<para/>Set using <see cref="Save(string)"/>;
-        /// </summary>
-        public string Name { get; private set; } = null;
-        /// <summary>
-        /// Loop Mode of the BRK animation. See the <seealso cref="LoopMode"/> enum for values
-        /// </summary>
-        public LoopMode Loop { get; set; } = LoopMode.ONCE;
-        /// <summary>
-        /// Length of the animation in Frames. (Game Framerate = 1 second)
-        /// </summary>
-        public ushort Time { get; set; }
-        /// <summary>
-        /// 
-        /// </summary>
-        public List<Animation> TextureAnimations { get; set; } = new List<Animation>();
+        FileUtil.ExceptionOnBadMagic(Strm, MAGIC);
+        uint FileSize = Strm.ReadUInt32(),
+            ChunkCount = Strm.ReadUInt32();
+        Strm.Position += 0x10; //Strm.ReadJ3DSubVersion();
 
-        private const string Magic = "J3D1btp1";
-        private const string Magic2 = "TPT1";
+        //Only 1 chunk is supported
+        uint ChunkStart = (uint)Strm.Position;
+        FileUtil.ExceptionOnBadMagic(Strm, CHUNKMAGIC);
+        uint ChunkSize = Strm.ReadUInt32();
+        Loop = Strm.ReadEnum<LoopMode, byte>(StreamUtil.ReadUInt8);
+        Strm.Position++; //Padding 0xFF
+        Duration = Strm.ReadUInt16();
 
-        /// <summary>
-        /// Create an Empty BTP
-        /// </summary>
-        public BTP() { }
-        /// <summary>
-        /// Open a BTP from a file
-        /// </summary>
-        /// <param name="filename"></param>
-        public BTP(string filename)
+        ushort AnimationCount = Strm.ReadUInt16(),
+            TextureIndexCount = Strm.ReadUInt16();
+
+        uint AnimationTableOffset = Strm.ReadUInt32() + ChunkStart,
+             TextureIndexTableOffset = Strm.ReadUInt32() + ChunkStart,
+             MaterialIndexTableOffset = Strm.ReadUInt32() + ChunkStart,
+             MaterialSTOffset = Strm.ReadUInt32() + ChunkStart;
+
+        ushort[] TextureIndexTable = Strm.ReadMultiAtOffset(TextureIndexTableOffset, StreamUtil.ReadMultiUInt16, TextureIndexCount);
+
+        ushort[] MaterialIndicies = Strm.ReadMultiAtOffset(MaterialIndexTableOffset, StreamUtil.ReadMultiUInt16, AnimationCount);
+
+        string[] MaterialNames = Strm.ReadJ3DStringTable((int)MaterialSTOffset);
+
+        for (int i = 0; i < AnimationCount; i++)
         {
-            FileStream BTPFile = new FileStream(filename, FileMode.Open);
-            Read(BTPFile);
-            BTPFile.Close();
-            Name = filename;
+            Animation anim = new() { MaterialName = MaterialNames[i], MaterialId = MaterialIndicies[i] }; //This is the only thing that doesn't get remapped
+            Strm.Position = AnimationTableOffset + (i * 0x08);
+
+            ushort Count = Strm.ReadUInt16(),
+                First = Strm.ReadUInt16();
+            anim.TextureId = Strm.ReadUInt8();
+
+            anim.AddRange(TextureIndexTable[First..(First+Count)]);
+            Add(anim);
         }
-        /// <summary>
-        /// Open a BTP from a stream
-        /// </summary>
-        /// <param name="BTPFile"></param>
-        ///<param name="filename"></param>
-        public BTP(Stream BTPFile, string filename = null)
+
+        Strm.Position = ChunkStart + ChunkSize;
+    }
+
+    public void Save(Stream Strm)
+    {
+        long Start = Strm.Position;
+        Strm.WriteString(MAGIC, Encoding.ASCII, null);
+        Strm.WritePlaceholder(4); //FileSize
+        Strm.Write(new byte[4] { 0x00, 0x00, 0x00, 0x01 }, 0, 4); //Chunk Count
+        Strm.Write(CollectionUtil.InitilizeArray((byte)0xFF, 0x10));
+
+        long ChunkStart = Strm.Position;
+        Strm.WriteString(CHUNKMAGIC, Encoding.ASCII, null);
+        Strm.WritePlaceholder(4); //ChunkSize
+        Strm.WriteByte((byte)Loop);
+        Strm.WriteByte(0xFF);
+        Strm.WriteUInt16(Duration);
+
+        Strm.WriteUInt16((ushort)Count);
+        Strm.WritePlaceholderMulti(2, 1); //Count Placeholders
+        Strm.WritePlaceholderMulti(4, 4); //Offset Placeholders
+
+        List<ushort> TextureIndexTable = new();
+        List<string> Names = new();
+        List<ushort> MaterialIdTable = new();
+
+        long AnimationTableOffset = Strm.Position;
+        for (int i = 0; i < Count; i++)
         {
-            Read(BTPFile);
-            Name = filename;
-        }
-        /// <summary>
-        /// Save the BTPto a file
-        /// </summary>
-        /// <param name="Filename">New file to save to</param>
-        public void Save(string Filename = null)
-        {
-            if (Name == null && Filename == null)
-                throw new Exception("No Filename has been given");
-            else if (Filename != null)
-                Name = Filename;
-
-            FileStream BTPFile = new FileStream(Filename, FileMode.Create);
-
-            Write(BTPFile);
-
-            BTPFile.Close();
-        }
-        /// <summary>
-        /// Save the BTP file to a memorystream
-        /// </summary>
-        /// <returns></returns>
-        public MemoryStream Save()
-        {
-            MemoryStream MS = new MemoryStream();
-            Write(MS);
-            return MS;
-        }
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <returns></returns>
-        public override string ToString() => $"{new FileInfo(Name).Name} {(TextureAnimations.Count > 0 ? $"[{TextureAnimations.Count} Texture Animation{(TextureAnimations.Count > 1 ? "s" : "")}] " : "")}";
-
-        private void Read(Stream BTPFile)
-        {
-            if (BTPFile.ReadString(8) != Magic)
-                throw new Exception($"Invalid Identifier. Expected \"{Magic}\"");
-
-            uint Filesize = BitConverter.ToUInt32(BTPFile.ReadReverse(0, 4), 0);
-            uint SectionCount = BitConverter.ToUInt32(BTPFile.ReadReverse(0, 4), 0);
-            if (SectionCount != 1)
-                throw new Exception(SectionCount > 1 ? "More than 1 section is in this BTP! Please send it to Super Hackio for investigation" : "There are no sections in this BTP!");
-
-            BTPFile.Seek(0x10, SeekOrigin.Current);
-            uint TPT1Start = (uint)BTPFile.Position;
-            if (BTPFile.ReadString(4) != Magic2)
-                throw new Exception($"Invalid Identifier. Expected \"{Magic2}\"");
-
-            uint TPT1Length = BitConverter.ToUInt32(BTPFile.ReadReverse(0, 4), 0);
-            Loop = (LoopMode)BTPFile.ReadByte();
-            BTPFile.ReadByte();
-            Time = BitConverter.ToUInt16(BTPFile.ReadReverse(0, 2), 0);
-
-            ushort MaterialAnimTableCount = BitConverter.ToUInt16(BTPFile.ReadReverse(0, 2), 0), TexIDTableCount = BitConverter.ToUInt16(BTPFile.ReadReverse(0, 2), 0);
-            uint MaterialAnimTableOffset = BitConverter.ToUInt32(BTPFile.ReadReverse(0, 4), 0) + TPT1Start, TexIDTableOffset = BitConverter.ToUInt32(BTPFile.ReadReverse(0, 4), 0) + TPT1Start,
-                RemapTableOffset = BitConverter.ToUInt32(BTPFile.ReadReverse(0, 4), 0) + TPT1Start, NameSTOffset = BitConverter.ToUInt32(BTPFile.ReadReverse(0, 4), 0) + TPT1Start;
-
-            BTPFile.Seek(NameSTOffset, SeekOrigin.Begin);
-            List<KeyValuePair<ushort, string>> MaterialNames = new List<KeyValuePair<ushort, string>>();
-            ushort StringCount = BitConverter.ToUInt16(BTPFile.ReadReverse(0, 2), 0);
-            BTPFile.Seek(2, SeekOrigin.Current);
-            for (int i = 0; i < StringCount; i++)
+            Animation current = this[i];
+            Names.Add(current.MaterialName);
+            MaterialIdTable.Add(current.MaterialId);
+            int Index = TextureIndexTable.SubListIndex(0, current);
+            if (Index == -1)
             {
-                ushort hash = BitConverter.ToUInt16(BTPFile.ReadReverse(0, 2), 0);
-                long PausePosition = BTPFile.Position + 2;
-                BTPFile.Seek(NameSTOffset + BitConverter.ToUInt16(BTPFile.ReadReverse(0, 2), 0), SeekOrigin.Begin);
-                MaterialNames.Add(new KeyValuePair<ushort, string>(hash, BTPFile.ReadString()));
-                BTPFile.Position = PausePosition;
+                Index = TextureIndexTable.Count;
+                TextureIndexTable.AddRange(current);
             }
-
-            BTPFile.Seek(RemapTableOffset, SeekOrigin.Begin);
-            List<ushort> RemapTable = new List<ushort>();
-            for (int i = 0; i < MaterialAnimTableCount; i++)
-                RemapTable.Add(BitConverter.ToUInt16(BTPFile.ReadReverse(0, 2), 0));
-
-            ushort TextureFrameCount, TextureFirstID;
-            for (int i = 0; i < MaterialAnimTableCount; i++)
-            {
-                Animation Anim = new Animation() { MaterialName = MaterialNames[i].Value, RemapIndex = RemapTable[i] };
-
-                BTPFile.Seek(MaterialAnimTableOffset + (i * 0x08), SeekOrigin.Begin);
-                TextureFrameCount = BitConverter.ToUInt16(BTPFile.ReadReverse(0, 2), 0);
-                TextureFirstID = BitConverter.ToUInt16(BTPFile.ReadReverse(0, 2), 0);
-                Anim.TexMapIndex = (byte)BTPFile.ReadByte();
-                for (int j = 0; j < TextureFrameCount; j++)
-                {
-                    BTPFile.Seek(TexIDTableOffset + ((TextureFirstID + j) * 0x02), SeekOrigin.Begin);
-                    Anim.TextureFrames.Add(BitConverter.ToUInt16(BTPFile.ReadReverse(0, 2), 0));
-                }
-
-                TextureAnimations.Add(Anim);
-            }
+            Strm.WriteUInt16((ushort)current.Count);
+            Strm.WriteUInt16((ushort)Index);
+            Strm.WriteByte(current.TextureId);
+            Strm.Write(CollectionUtil.InitilizeArray((byte)0xFF, 0x03));
         }
 
-        private void Write(Stream BTPFile)
-        {
-            string Padding = "Hack.io.BTP © Super Hackio Incorporated 2019-2020";
-            BTPFile.WriteString(Magic);
-            BTPFile.Write(new byte[8] { 0xDD, 0xDD, 0xDD, 0xDD, 0x00, 0x00, 0x00, 0x01 }, 0, 8);
-            BTPFile.Write(new byte[16] { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, }, 0, 16);
+        long TextureIndexTableOffset = Strm.Position;
+        Strm.WriteMultiUInt16(TextureIndexTable);
+        Strm.PadTo(4, J3D.Utility.PADSTRING);
 
-            uint TPT1Start = (uint)BTPFile.Position;
-            BTPFile.WriteString(Magic2);
-            BTPFile.Write(new byte[4] { 0xDD, 0xDD, 0xDD, 0xDD }, 0, 4);
-            BTPFile.WriteByte((byte)Loop);
-            BTPFile.WriteByte(0xFF);
-            BTPFile.WriteReverse(BitConverter.GetBytes(Time), 0, 2);
+        long MaterialIndexTableOffset = Strm.Position;
+        Strm.WriteMultiUInt16(MaterialIdTable);
+        Strm.PadTo(4, J3D.Utility.PADSTRING);
 
-            BTPFile.WriteReverse(BitConverter.GetBytes((ushort)TextureAnimations.Count), 0, 2);
-            List<ushort> FullTexIDList = new List<ushort>();
-            for (int i = 0; i < TextureAnimations.Count; i++)
-                FindMatch(ref FullTexIDList, TextureAnimations[i].TextureFrames);
-            BTPFile.WriteReverse(BitConverter.GetBytes((ushort)FullTexIDList.Count), 0, 2);
+        //String Table
+        long StringTableOffset = Strm.Position;
+        Strm.WriteJ3DStringTable(Names);
+        Strm.PadTo(32, J3D.Utility.PADSTRING);
 
-            long MatAnimTableOffsetPos = BTPFile.Position;
-            int offs = 0x20;
-            BTPFile.WriteReverse(BitConverter.GetBytes(offs), 0, 4);
 
-            long TexIDTableOffsetPos = BTPFile.Position;
-            offs += TextureAnimations.Count * 8;
-            BTPFile.WriteReverse(BitConverter.GetBytes(offs), 0, 4);
+        long FileLength = Strm.Position;
 
-            long RemapTableOffsetPos = BTPFile.Position;
-            offs += FullTexIDList.Count * 2;
-            #region Padding
-            while (offs % 4 != 0)
-                offs++;
-            #endregion
-            BTPFile.WriteReverse(BitConverter.GetBytes(offs), 0, 4);
+        Strm.Position = Start + 0x08;
+        Strm.WriteUInt32((uint)(FileLength - Start));
 
-            long NameSTOffsetPos = BTPFile.Position;
-            offs += TextureAnimations.Count * 2;
-            #region Padding
-            while (offs % 4 != 0)
-                offs++;
-            #endregion
-            BTPFile.WriteReverse(BitConverter.GetBytes(offs), 0, 4);
+        Strm.Position = ChunkStart + 0x04;
+        Strm.WriteUInt32((uint)(FileLength - (ChunkStart - Start)));
 
-            List<byte> Remaps = new List<byte>();
-            string[] matnames = new string[TextureAnimations.Count];
-            for (int i = 0; i < TextureAnimations.Count; i++)
-            {
-                BTPFile.WriteReverse(BitConverter.GetBytes((ushort)TextureAnimations[i].TextureFrames.Count), 0, 2);
-                BTPFile.WriteReverse(BitConverter.GetBytes((ushort)FindMatch(ref FullTexIDList, TextureAnimations[i].TextureFrames)), 0, 2);
-                BTPFile.WriteByte(TextureAnimations[i].TexMapIndex);
-                BTPFile.WriteByte(0xFF);
-                BTPFile.WriteByte(0xFF);
-                BTPFile.WriteByte(0xFF);
-                byte[] temp = BitConverter.GetBytes(TextureAnimations[i].RemapIndex);
-                temp.Reverse();
-                Remaps.AddRange(temp);
-                matnames[i] = TextureAnimations[i].MaterialName;
-            }
+        Strm.Position = ChunkStart + 0x0E;
+        Strm.WriteUInt16((ushort)TextureIndexTable.Count);
+        Strm.WriteUInt32((uint)(AnimationTableOffset - ChunkStart));
+        Strm.WriteUInt32((uint)(TextureIndexTableOffset - ChunkStart));
+        Strm.WriteUInt32((uint)(MaterialIndexTableOffset - ChunkStart));
+        Strm.WriteUInt32((uint)(StringTableOffset - ChunkStart));
 
-            for (int i = 0; i < FullTexIDList.Count; i++)
-                BTPFile.WriteReverse(BitConverter.GetBytes(FullTexIDList[i]), 0, 2);
+        Strm.Position = FileLength;
+    }
 
-            #region Padding
-            int PadCount = 0;
-            while (BTPFile.Position % 4 != 0)
-                BTPFile.WriteByte((byte)Padding[PadCount++]);
-            #endregion
-
-            BTPFile.Write(Remaps.ToArray(), 0, Remaps.Count);
-
-            #region Padding
-            PadCount = 0;
-            while (BTPFile.Position % 4 != 0)
-                BTPFile.WriteByte((byte)Padding[PadCount++]);
-            #endregion
-
-            BTPFile.WriteReverse(BitConverter.GetBytes((ushort)matnames.Length), 0, 2);
-            BTPFile.Write(new byte[2] { 0xFF, 0xFF }, 0, 2);
-            ushort stringofffset = (ushort)(4 + (4 * matnames.Length));
-            List<byte> bytestrings = new List<byte>();
-            for (int i = 0; i < matnames.Length; i++)
-            {
-                BTPFile.WriteReverse(BitConverter.GetBytes(StringToHash(matnames[i])), 0, 2);
-                BTPFile.WriteReverse(BitConverter.GetBytes(stringofffset), 0, 2);
-                byte[] currentstring = Encoding.GetEncoding(932).GetBytes(matnames[i]);
-                stringofffset += (ushort)(currentstring.Length + 1);
-                bytestrings.AddRange(currentstring);
-                bytestrings.Add(0x00);
-            }
-            BTPFile.Write(bytestrings.ToArray(), 0, bytestrings.Count);
-            #region Padding
-            PadCount = 0;
-            while (BTPFile.Position % 32 != 0)
-                BTPFile.WriteByte((byte)Padding[PadCount++]);
-            #endregion
-
-            BTPFile.Position = 0x08;
-            BTPFile.WriteReverse(BitConverter.GetBytes((uint)BTPFile.Length), 0, 4);
-            BTPFile.Position = TPT1Start + 0x04;
-            BTPFile.WriteReverse(BitConverter.GetBytes((uint)(BTPFile.Length - TPT1Start)), 0, 4);
-        }
-
+    /// <inheritdoc cref="J3D.DocGen.COMMON_ANIMATIONCLASS"/>
+    public class Animation : List<ushort>, IJ3DAnimationContainer
+    {
+        /// <inheritdoc cref="J3D.DocGen.COMMON_MATERIALNAME"/>
+        public string MaterialName { get; set; } = "";
         /// <summary>
-        /// Animation Container
+        /// index to the Texture inside the material to target
         /// </summary>
-        public class Animation
-        {
-            /// <summary>
-            /// Name of the Material that this animation applies to
-            /// </summary>
-            public string MaterialName { get; set; }
-            /// <summary>
-            /// Unknown
-            /// </summary>
-            public ushort RemapIndex { get; set; }
-            /// <summary>
-            /// The Texture map to change
-            /// </summary>
-            public byte TexMapIndex { get; set; }
-            /// <summary>
-            /// List of texture ID's.<para/>These ID's are relative to the entire BMD/BDL Texture Storage.
-            /// </summary>
-            public List<ushort> TextureFrames { get; set; } = new List<ushort>();
-
-            /// <summary>
-            /// Create an empty animation
-            /// </summary>
-            public Animation() { }
-            /// <summary>
-            /// 
-            /// </summary>
-            /// <returns></returns>
-            public override string ToString() => $"{MaterialName} [{TextureFrames.Count} Frame{(TextureFrames.Count > 1 ? "s":"")}]";
-        }
-
+        public byte TextureId { get; set; }
         /// <summary>
-        /// Generates a 2 byte hash from a string
+        /// Index of the material this animation targets
         /// </summary>
-        /// <param name="Input">string to convert</param>
-        /// <returns>hashed string</returns>
-        static internal ushort StringToHash(string Input)
-        {
-            int Hash = 0;
-            for (int i = 0; i < Input.Length; i++)
-            {
-                Hash *= 3;
-                Hash += Input[i];
-                Hash = 0xFFFF & Hash; //cast to short 
-            }
+        public ushort MaterialId { get; set; }
 
-            return (ushort)Hash;
-        }
+        public override string ToString() => $"{MaterialName} - Texture {TextureId}";
 
-        private short FindMatch(ref List<ushort> FullList, List<ushort> currentSequence)
-        {
-            if (!FullList.ContainsSubsequence(currentSequence))
-            {
-                FullList.AddRange(currentSequence);
-            }
+        public override bool Equals(object? obj) => obj is Animation animation &&
+                   MaterialName == animation.MaterialName &&
+                   TextureId == animation.TextureId &&
+                   this.SequenceEqual(animation);
 
-            return (short)FullList.SubListIndex(0, currentSequence);
-        }
-
-        //=====================================================================
-
-        /// <summary>
-        /// Cast a BTPK to a RARCFile
-        /// </summary>
-        /// <param name="x"></param>
-        public static implicit operator RARC.RARC.File(BTP x)
-        {
-            return new RARC.RARC.File(x.Name, x.Save());
-        }
-
-        /// <summary>
-        /// Cast a RARCFile to a BTP
-        /// </summary>
-        /// <param name="x"></param>
-        public static implicit operator BTP(RARC.RARC.File x)
-        {
-            return new BTP((MemoryStream)x, x.Name);
-        }
-
-        //=====================================================================
+        public override int GetHashCode() => HashCode.Combine(MaterialName, TextureId, this as List<ushort>);
     }
 }

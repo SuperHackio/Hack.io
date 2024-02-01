@@ -1,540 +1,495 @@
-﻿using Hack.io.Util;
-using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
+﻿using System.Data;
 using System.Text;
+using Hack.io.Interface;
+using Hack.io.Utility;
 
-namespace Hack.io.BCSV
+namespace Hack.io.BCSV;
+
+/// <summary>
+/// Binary Comma Separated Values<para/>
+/// Represents a table like structure used in J3D Games
+/// </summary>
+public class BCSV : ILoadSaveFile
 {
+    #region Properties
     /// <summary>
-    /// Binary Comma Seperated Values<para/>A table like format used for storing data
+    /// The Dictionary containing all the fields in this BCSV
     /// </summary>
-    public class BCSV
+    protected Dictionary<uint, Field> Fields { get; set; } = [];
+    /// <summary>
+    /// The list of Entries in this BCSV
+    /// </summary>
+    protected List<Entry> Entries { get; set; } = [];
+    /// <summary>
+    /// The encoding to use while handling text. Should only realistically be Shift-JIS or UTF-8
+    /// </summary>
+    public Encoding Encoding
     {
-        /// <summary>
-        /// Filename of this BCSV file.
-        /// </summary>
-        public string FileName { get; set; } = null;
-
-        /// <summary>
-        /// Gets or sets the BCSVEntry at the specified index.
-        /// </summary>
-        /// <param name="index"></param>
-        /// <returns></returns>
-        public BCSVEntry this[int index]
+        get => encoding;
+        set
         {
-            get { return Entries[index]; }
-            set { Entries[index] = value; }
-        }
-        /// <summary>
-        /// Gets or sets the value associated with the specified hash.
-        /// </summary>
-        /// <param name="hash"></param>
-        /// <returns></returns>
-        public BCSVField this[uint hash]
-        {
-            get { return Fields[hash]; }
-            set { Fields[hash] = value; }
-        }
-
-        /// <summary>
-        /// The Dictionary containing all the fields in this BCSV
-        /// </summary>
-        public Dictionary<uint, BCSVField> Fields { get; set; }
-        /// <summary>
-        /// The number of fields in this BCSV
-        /// </summary>
-        public int FieldCount => Fields == null ? -1 : Fields.Count;
-        /// <summary>
-        /// The list of Entries in this BCSV
-        /// </summary>
-        public List<BCSVEntry> Entries { get; set; }
-        /// <summary>
-        /// The number of entries in this BCSV
-        /// </summary>
-        public int EntryCount => Entries == null ? -1 : Entries.Count;
-
-        /// <summary>
-        /// Create a new BCSV
-        /// </summary>
-        public BCSV()
-        {
-            Fields = new Dictionary<uint, BCSVField>();
-            Entries = new List<BCSVEntry>();
-        }
-        /// <summary>
-        /// Open a BCSV File
-        /// </summary>
-        /// <param name="Filename">filepath</param>
-        public BCSV(string Filename)
-        {
-            FileStream fs = new FileStream(Filename, FileMode.Open);
-            Read(fs);
-            fs.Close();
-            FileName = Filename;
-        }
-        /// <summary>
-        /// Read a BCSV from a stream. The stream position must be at the start of the BCSV File
-        /// </summary>
-        /// <param name="BCSV">The stream to read from</param>
-        public BCSV(Stream BCSV) => Read(BCSV);
-
-        /// <summary>
-        /// Save the BCSV to a file
-        /// </summary>
-        /// <param name="Filename"></param>
-        public void Save(string Filename)
-        {
-            FileStream fs = new FileStream(Filename, FileMode.Create);
-            Save(fs);
-            fs.Close();
-            FileName = Filename;
-        }
-        /// <summary>
-        /// Save the BCSV using a Stream
-        /// </summary>
-        /// <param name="BCSV"></param>
-        public void Save(Stream BCSV)
-        {
-            BCSV.WriteReverse(BitConverter.GetBytes(EntryCount), 0, 4);
-
-            ushort offset = 0;
-            List<KeyValuePair<uint, BCSVField>> FieldList = Fields.ToList();
-            List<KeyValuePair<uint, BCSVField>> OrganizedFieldList = GenerateSortedFields(FieldList);
-            for (int i = 0; i < OrganizedFieldList.Count; i++)
-            {
-                BCSVField currentfield = OrganizedFieldList[i].Value;
-                if (currentfield.AutoRecalc)
-                {
-                    currentfield.AutoRecalc = false;
-                    currentfield.Bitmask = currentfield.DataType == DataTypes.BYTE ? 0x000000FF : (currentfield.DataType == DataTypes.INT16 ? 0x0000FFFF : 0xFFFFFFFF);
-                    currentfield.ShiftAmount = 0;
-                }
-                currentfield.EntryOffset = offset;
-                offset += (ushort)(currentfield.DataType == DataTypes.BYTE ? 1 : (currentfield.DataType == DataTypes.INT16 ? 2 : 4));
-            }
-            while (offset % 4 != 0)
-                offset++;
-
-            #region Fill the Entries
+            encoding = value;
             for (int i = 0; i < EntryCount; i++)
-                Entries[i].FillMissingFields(Fields);
-            #endregion
+                Entries[i].Encoding = encoding;
+        }
+    }
 
-            #region Collect the strings
-            List<string> Strings = new List<string>();// { "5324" };
-            for (int i = 0; i < EntryCount; i++)
+    /// <summary>
+    /// The field data calculator to use on saving
+    /// </summary>
+    public FieldDataCalculator OnSaveFieldCalculator
+    {
+        get => fieldDataCalculator;
+        set
+        {
+            if (value is null)
+                throw new NullReferenceException($"You MUST set a Field Calculator. Use {nameof(CalculateFieldDataDefault)} instead of null");
+            fieldDataCalculator = value;
+        }
+    }
+
+    //READONLY
+    /// <summary>
+    /// The number of fields in this BCSV
+    /// </summary>
+    public int FieldCount => Fields == null ? -1 : Fields.Count;
+    /// <summary>
+    /// The number of entries in this BCSV
+    /// </summary>
+    public int EntryCount => Entries == null ? -1 : Entries.Count;
+
+    //INDEXORS
+    /// <summary>
+    /// Gets or sets the BCSV.Entry at the specified index.
+    /// </summary>
+    /// <param name="index"></param>
+    /// <returns></returns>
+    public Entry this[int index]
+    {
+        get => Entries[index];
+        set
+        {
+            UpdateEntryFields(ref value);
+            Entries[index] = value;
+        }
+    }
+    /// <summary>
+    /// Gets or sets the value associated with the specified hash.
+    /// </summary>
+    /// <param name="hash"></param>
+    /// <returns></returns>
+    public Field this[uint hash]
+    {
+        get { return Fields[hash]; }
+        set
+        {
+            Fields[hash] = value;
+            for (int i = 0; i < Entries.Count; i++)
             {
-                for (int j = 0; j < Entries[i].Data.Count; j++)
-                {
-                    if (Fields.ContainsKey(Entries[i].Data.ElementAt(j).Key) && Fields[Entries[i].Data.ElementAt(j).Key].DataType == DataTypes.STRING)
-                    {
-                        if (!Strings.Any(O => O.Equals((string)Entries[i].Data.ElementAt(j).Value)))
-                            Strings.Add((string)Entries[i].Data.ElementAt(j).Value);
-                    }
-                }
+                Entry e = Entries[i];
+                UpdateEntryFields(ref e);
             }
-            #endregion
+        }
+    }
+    #endregion
 
-            BCSV.WriteReverse(BitConverter.GetBytes(Fields.Count), 0, 4);
-            BCSV.Write(new byte[4], 0, 4);
-            BCSV.WriteReverse(BitConverter.GetBytes((int)offset), 0, 4);
+    #region Fields
+    private Encoding encoding = StreamUtil.ShiftJIS;
+    private FieldDataCalculator fieldDataCalculator = CalculateFieldDataDefault;
+    #endregion
 
-            Console.WriteLine("Writing the Fields:");
-            for (int i = 0; i < Fields.Count; i++)
+    /// <summary>
+    /// Creates an empty BCSV
+    /// </summary>
+    public BCSV() { }
+
+    #region Functions
+    /// <summary>
+    /// Adds a new Entry to the BCSV.<para/>IMPORTANT: The input entry will have it's fields edited to match the field definition of this BCSV.
+    /// </summary>
+    /// <param name="NewElement">The new entry to add</param>
+    public void Add(Entry NewElement)
+    {
+        UpdateEntryFields(ref NewElement);
+        Entries.Add(NewElement);
+    }
+    /// <summary>
+    /// Adds a new Field to the BCSV.<para/>IMPORTANT: This will update all BCSV entries to have the missing field data. Default values will be used.
+    /// </summary>
+    /// <param name="NewElement">The new field to add</param>
+    /// <exception cref="DuplicateNameException">Thrown if the field already exists in the BCSV</exception>
+    public void Add(Field NewElement)
+    {
+        if (Fields.ContainsKey(NewElement.HashName))
+            throw new DuplicateNameException(string.Format(JMapException.FIELD_ALREADY_EXISTS_ERROR, NewElement.HashName));
+        Fields.Add(NewElement.HashName, NewElement);
+        for (int i = 0; i < EntryCount; i++)
+            Entries[i].Data.Add(NewElement.HashName, GetDefaultValue(NewElement.DataType));
+    }
+
+    /// <inheritdoc cref="AddRange(IReadOnlyList{Entry})"/>
+    public void Add(params Entry[] NewElements) => AddRange(NewElements);
+    /// <inheritdoc cref="AddRange(IReadOnlyList{Field})"/>
+    public void Add(params Field[] NewElements) => AddRange(NewElements);
+
+    /// <summary>
+    /// Add multiple entries at once to the BCSV
+    /// </summary>
+    /// <param name="NewElements">Collection of entries to add</param>
+    public void AddRange(IReadOnlyList<Entry> NewElements)
+    {
+        for (int i = 0; i < NewElements.Count; i++)
+            Add(NewElements[i]);
+    }
+    /// <summary>
+    /// Add multiple fields at once to the BCSV
+    /// </summary>
+    /// <param name="NewElements">Collection of fields to add</param>
+    public void AddRange(IReadOnlyList<Field> NewElements)
+    {
+        for (int i = 0; i < NewElements.Count; i++)
+            Add(NewElements[i]);
+    }
+
+    /// <summary>
+    /// Insert an Entry at the specified index
+    /// </summary>
+    /// <param name="Index">The index to insert at</param>
+    /// <param name="NewElement">The Entry to insert</param>
+    /// <exception cref="ArgumentOutOfRangeException"></exception>
+    public void Insert(int Index, Entry NewElement)
+    {
+        UpdateEntryFields(ref NewElement);
+        Entries.Insert(Index, NewElement);
+    }
+    
+    /// <summary>
+    /// Insert multiple Entry objects at once to the BCSV at the specified index
+    /// </summary>
+    /// <param name="Index">The index to insert at</param>
+    /// <param name="NewElements">The entries to insert</param>
+    public void InsertRange(int Index, IReadOnlyList<Entry> NewElements)
+    {
+        for (int i = 0; i < NewElements.Count; i++)
+        {
+            Entry e = NewElements[i];
+            UpdateEntryFields(ref e);
+        }
+        Entries.InsertRange(Index, NewElements);
+    }
+    
+    /// <summary>
+    /// Removes a specific Entry
+    /// </summary>
+    /// <param name="Target">The entry to remove</param>
+    public void Remove(Entry Target) => Entries.Remove(Target);
+    /// <summary>
+    /// Removes all entries that match the <see cref="Predicate{Entry}"/>
+    /// </summary>
+    /// <param name="match">The conditions to remove</param>
+    /// <returns>the number of removed entries</returns>
+    public int RemoveAll(Predicate<Entry> match) => Entries.RemoveAll(match);
+    /// <summary>
+    /// Remove the Entry at the given index
+    /// </summary>
+    /// <param name="Index">index to remove at</param>
+    /// <exception cref="IndexOutOfRangeException">The index is outside the bounds of the array</exception>
+    public void RemoveAt(int Index) => Entries.RemoveAt(Index);
+    /// <summary>
+    /// Remove several Entry objects at once
+    /// </summary>
+    /// <param name="Index">The zero-based starting index of the range of entries to remove.</param>
+    /// <param name="Count">The number of entries to remove.</param>
+    public void RemoveRange(int Index, int Count) => Entries.RemoveRange(Index, Count);
+
+    /// <inheritdoc cref="List{Entry}.Reverse()"/>
+    public void Reverse() => Entries.Reverse();
+    /// <inheritdoc cref="List{Entry}.Reverse(int,int)"/>
+    public void Reverse(int index, int count) => Entries.Reverse(index, count);
+
+    /// <summary>
+    /// Empty some data. Can empty the Entries or Fields. Or Both.<para/>By default, this only clears out the Entries
+    /// </summary>
+    /// <param name="ClearEntries">Clear the entry list?</param>
+    /// <param name="ClearFields">Clear the field dictionary?<para/>Note that clearing the fields will also clear the data inside the entries, but not change the number of entries</param>
+    public void Clear(bool ClearEntries = true, bool ClearFields = false)
+    {
+        if (ClearEntries)
+            Entries.Clear();
+        if (ClearFields)
+        {
+            Fields.Clear();
+            for (int i = 0; i < Entries.Count; i++)
             {
-                Fields.ElementAt(i).Value.Write(BCSV);
-                Console.Write($"\r{Math.Min(((float)(i + 1) / (float)Fields.Count) * 100.0f, 100.0f)}%          ");
+                Entry e = Entries[i];
+                UpdateEntryFields(ref e);
             }
-            Console.WriteLine("Complete!");
+        }
+    }
 
-            while (BCSV.Position % 4 != 0)
-                BCSV.WriteByte(0x00);
+    /// <summary>
+    /// Sort the entries by a given function
+    /// </summary>
+    /// <param name="Comparison"></param>
+    public void Sort(Comparison<Entry> Comparison) => Entries.Sort(Comparison);
 
-            uint DataPos = (uint)BCSV.Position;
-            BCSV.Position = 0x08;
-            BCSV.WriteReverse(BitConverter.GetBytes(DataPos), 0, 4);
-            BCSV.Position = DataPos;
-            Console.WriteLine("Writing the Entries:");
-            for (int i = 0; i < EntryCount; i++)
+    /// <summary>
+    /// Determines if this BCSV contains a field with the given Hash
+    /// </summary>
+    /// <param name="hash">The hash to look for</param>
+    /// <returns></returns>
+    public bool ContainsField(uint hash) => Fields.ContainsKey(hash);
+
+    /// <summary>
+    /// Sets all fields to be recalculated. See <see cref="Field.AutoRecalc"/>.
+    /// </summary>
+    public void SetAllRecalculate(bool toggle = true)
+    {
+        foreach (Field item in Fields.Values)
+            item.AutoRecalc = toggle;
+    }
+    
+    
+    private void UpdateEntryFields(ref Entry Element)
+    {
+        Element.Encoding = Encoding;
+        Element.FillMissingFields(Fields);
+        Element.RemoveMissingFields(Fields);
+    }
+    internal ushort CalcEntrySize()
+    {
+        ushort Size = 0;
+        foreach (Field item in Fields.Values)
+            Size = (ushort)Math.Max(Size, item.EntryOffset + GetDataTypeSize(item.DataType));
+        return Size;
+    }
+    #endregion
+
+    /// <inheritdoc/>
+    public virtual void Load(Stream Strm)
+    {
+        Fields.Clear();
+        Entries.Clear();
+
+        int entrycount = Strm.ReadInt32();
+        int fieldcount = Strm.ReadInt32();
+        uint dataoffset = Strm.ReadUInt32();
+        uint entrysize = Strm.ReadUInt32();
+
+        for (int i = 0; i < fieldcount; i++)
+        {
+            Field f = new()
             {
-                Entries[i].Save(BCSV, Fields, offset, Strings);
-                while (BCSV.Position % 4 != 0)
-                    BCSV.WriteByte(0x00);
-                Console.Write($"\r{Math.Min(((float)(i + 1) / (float)Entries.Count) * 100.0f, 100.0f)}%          ");
-            }
-            Console.WriteLine("Complete!");
-            for (int i = 0; i < Strings.Count; i++)
+                HashName = Strm.ReadUInt32(),
+                Bitmask = Strm.ReadUInt32(),
+                EntryOffset = Strm.ReadUInt16(),
+                ShiftAmount = (byte)Strm.ReadByte(),
+                DataType = (DataTypes)Strm.ReadByte()
+            };
+            Fields.Add(f.HashName, f);
+        }
+        Span<byte> charreadarray = stackalloc byte[32];
+        long stringtable = dataoffset + (entrycount * entrysize);
+        for (int i = 0; i < entrycount; i++)
+        {
+            Entry e = CreateEntry();
+            e.Encoding = Encoding;
+            foreach (Field field in Fields.Values)
             {
-                BCSV.WriteString(Strings[i], 0x00);
-            }
-            uint numPadding = 16 - (uint)(BCSV.Position % 16);
-            byte[] padding = new byte[numPadding];
-            for (int i = 0; i < numPadding; i++)
-                padding[i] = 64;
-            BCSV.Write(padding, 0, (int)numPadding);
-        }
-        /// <summary>
-        /// Save the BCSV to a MemoryStream
-        /// </summary>
-        /// <returns></returns>
-        public MemoryStream Save()
-        {
-            MemoryStream ms = new MemoryStream();
-            Save(ms);
-            return ms;
-        }
-
-        /// <summary>
-        /// Add a BCSVEntry to the Entry List
-        /// </summary>
-        /// <param name="entry">Entry to add</param>
-        public void Add(BCSVEntry entry) => Entries.Add(entry);
-        /// <summary>
-        /// Add a BCSVField to the Field Dictionary
-        /// </summary>
-        /// <param name="field">Field to add</param>
-        public void Add(BCSVField field) => Fields.Add(field.HashName, field);
-        /// <summary>
-        /// Add Multiple BCSVEntry objects at once to the Field Dictionary
-        /// </summary>
-        /// <param name="array">Array of fields to add</param>
-        public void Add(params BCSVEntry[] array) => Entries.AddRange(array);
-        /// <summary>
-        /// Add Multiple BCSVField objects at once to the Field Dictionary
-        /// </summary>
-        /// <param name="array">Array of fields to add</param>
-        public void Add(params BCSVField[] array)
-        {
-            for (int i = 0; i < array.Length; i++)
-                Fields.Add(array[i].HashName, array[i]);
-        }
-        /// <summary>
-        /// Add multiple BCSVEntry objects at once to the Entry List
-        /// </summary>
-        /// <param name="list">List of entries to add</param>
-        public void AddRange(List<BCSVEntry> list) => Entries.AddRange(list);
-        /// <summary>
-        /// Add multiple BCSVEntry objects at once to the Entry List
-        /// </summary>
-        /// <param name="array">Array of entries to add</param>
-        public void AddRange(BCSVEntry[] array) => Entries.AddRange(array);
-        /// <summary>
-        /// Add Multiple BCSVField objects at once to the Field Dictionary
-        /// </summary>
-        /// <param name="list">List of fields to add</param>
-        public void AddRange(List<BCSVField> list)
-        {
-            for (int i = 0; i < list.Count; i++)
-                Fields.Add(list[i].HashName, list[i]);
-        }
-        /// <summary>
-        /// Add Multiple BCSVField objects at once to the Field Dictionary
-        /// </summary>
-        /// <param name="array">Array of fields to add</param>
-        public void AddRange(BCSVField[] array)
-        {
-            for (int i = 0; i < array.Length; i++)
-                Fields.Add(array[i].HashName, array[i]);
-        }
-        /// <summary>
-        /// Insert a BCSVEntry to the Entry List at a specified position
-        /// </summary>
-        /// <param name="index">The Index to add the new entry at</param>
-        /// <param name="entry">Entry to add</param>
-        public void Insert(int index, BCSVEntry entry) => Entries.Insert(index, entry);
-        /// <summary>
-        /// Add multiple BCSVEntry objects at once to the Entry List at a specified position
-        /// </summary>
-        /// <param name="index">The Index to add the new entries at</param>
-        /// <param name="list">List of entries to add</param>
-        public void InsertRange(int index, List<BCSVEntry> list) => Entries.InsertRange(index, list);
-        /// <summary>
-        /// Add multiple BCSVEntry objects at once to the Entry List at a specified position
-        /// </summary>
-        /// <param name="index">The Index to add the new entries at</param>
-        /// <param name="array">Array of entries to add</param>
-        public void InsertRange(int index, BCSVEntry[] array) => Entries.InsertRange(index, array);
-        /// <summary>
-        /// Remove the BCSVEntry at the given index
-        /// </summary>
-        /// <param name="index">index to remove at</param>
-        /// <exception cref="IndexOutOfRangeException">The index is outside the bounds of the array</exception>
-        public void Remove(int index) => Entries.RemoveAt(index);
-        /// <summary>
-        /// Removes a specific BCSVEntry
-        /// </summary>
-        /// <param name="entry">The entry to remove</param>
-        public void Remove(BCSVEntry entry) => Entries.Remove(entry);
-        /// <summary>
-        /// Remove the BCSVField with the given hash
-        /// </summary>
-        /// <param name="hashkey">the hash used to remove the field</param>
-        public void Remove(uint hashkey) => Fields.Remove(hashkey);
-        /// <summary>
-        /// Remove the BCSVField with the Given name (Case-Sensitive)
-        /// </summary>
-        /// <param name="Fieldname">The name of the field to remove</param>
-        public void Remove(string Fieldname) => Fields.Remove(FieldNameToHash(Fieldname));
-        /// <summary>
-        /// Remove several BCSVEntry objects at once
-        /// </summary>
-        /// <param name="First">The zero-based starting index of the range of entries to remove.</param>
-        /// <param name="Count">The number of entries to remove.</param>
-        public void RemoveRange(int First, int Count) => Entries.RemoveRange(First, Count);
-        /// <summary>
-        /// Removes all BCSV Entries that match a certain condition
-        /// </summary>
-        /// <param name="match"></param>
-        public void RemoveAll(Predicate<BCSVEntry> match) => Entries.RemoveAll(match);
-        /// <summary>
-        /// Empty some data. Can empty the Entries or Fields. Or Both.<para/>By default, this only clears out the Entries
-        /// </summary>
-        /// <param name="ClearEntries">Clear the entry list?</param>
-        /// <param name="ClearFields">Clear the field dictionary?</param>
-        public void Clear(bool ClearEntries = true, bool ClearFields = false)
-        {
-            if (ClearEntries)
-                Entries.Clear();
-            if (ClearFields)
-                Fields.Clear();
-        }
-        /// <summary>
-        /// Sort the BCSV Entries by a given function
-        /// </summary>
-        /// <typeparam name="TSource"></typeparam>
-        /// <typeparam name="TKey"></typeparam>
-        /// <param name="KeySelector"></param>
-        public void Sort<TSource, TKey>(Func<BCSVEntry, TKey> KeySelector) => Entries = Entries.OrderBy(KeySelector).ToList();
-        /// <summary>
-        /// Determines if this BCSV contains a field with the given Hash
-        /// </summary>
-        /// <param name="hash">The hash to look for</param>
-        /// <returns></returns>
-        public bool ContainsField(uint hash) => Fields.ContainsKey(hash);
-        /// <summary>
-        /// Determines if this BCSV contains a field with the given Name. (Case-Sensitive)
-        /// </summary>
-        /// <param name="Fieldname">The Name of the Field</param>
-        /// <returns></returns>
-        public bool ContainsField(string Fieldname) => Fields.ContainsKey(FieldNameToHash(Fieldname));
-
-        /// <summary>
-        /// Converts a field name to a hash.
-        /// </summary>
-        /// <param name="field">the string to convert</param>
-        /// <returns>the hashed string</returns>
-        public static uint FieldNameToHash(string field)
-        {
-            uint ret = 0;
-            foreach (char ch in field)
-            {
-                ret *= 0x1F;
-                ret += ch;
-            }
-            return ret;
-        }
-        
-        //public int InsertAndCombine(int StartingValue, int AddingValue, out uint Mask, out byte ShiftVal)
-        //{
-        //    Mask = 0;
-        //    ShiftVal = 0;
-
-        //    BitArray StartingBits = new BitArray(new int[] { StartingValue });
-        //    BitArray AddingBits = new BitArray(new int[] { AddingValue });
-
-        //    int MinAddBitSize = GetMinLength(AddingValue);
-        //    bool success = false;
-        //    for (int i = 0; i < StartingBits.Count - MinAddBitSize; i++)
-        //    {
-        //        if (StartingBits[i] == AddingBits[0])
-        //        {
-        //            bool CanFit = true;
-        //            for (int j = 0; j < MinAddBitSize; j++)
-        //            {
-        //                if (StartingBits[i + j] != AddingBits[j])
-        //                {
-        //                    CanFit = false;
-        //                    break;
-        //                }
-        //            }
-
-        //            if (CanFit)
-        //            {
-        //                success = true;
-        //                BitArray BitMask = new BitArray(new int[1]);
-        //                for (int j = 0; j < MinAddBitSize; j++)
-        //                {
-        //                    BitMask[i + j] = true;
-        //                }
-        //                Mask = (uint)BitMask.ToInt32();
-        //                ShiftVal = (byte)i;
-        //                break;
-        //            }
-        //        }
-        //    }
-        //    if (!success)
-        //    {
-        //        int NumberInsertLocation = GetMinLength(StartingValue);
-        //        int BackwardsOffset = 0;
-        //        bool HasFoundFit = false;
-        //        int BestFitOffset = 0;
-        //        while (NumberInsertLocation - BackwardsOffset > 0)
-        //        {
-        //            if (StartingBits[NumberInsertLocation - BackwardsOffset] == AddingBits[0])
-        //            {
-        //                bool CanFit = true;
-        //                for (int i = 0; i < MinAddBitSize; i++)
-        //                {
-        //                    if (AddingBits[i] && StartingBits[(NumberInsertLocation - BackwardsOffset) + i] != AddingBits[i])
-        //                    {
-        //                        if ((NumberInsertLocation - BackwardsOffset) + i < NumberInsertLocation)
-        //                        {
-        //                            CanFit = false;
-        //                            break;
-        //                        }
-        //                    }
-        //                }
-
-        //                if (CanFit)
-        //                {
-        //                    HasFoundFit = true;
-        //                    BestFitOffset = NumberInsertLocation - BackwardsOffset;
-        //                    break;
-        //                }
-        //            }
-        //            BackwardsOffset++;
-        //        }
-
-        //        for (int j = 0; j < MinAddBitSize; j++)
-        //        {
-        //            StartingBits[HasFoundFit ? BestFitOffset + j : NumberInsertLocation] = AddingBits[j];
-        //        }
-
-        //        BitArray BitMask = new BitArray(new int[1]);
-        //        for (int j = 0; j < MinAddBitSize; j++)
-        //        {
-        //            BitMask[HasFoundFit ? BestFitOffset + j : NumberInsertLocation] = true;
-        //        }
-        //        Mask = (uint)BitMask.ToInt32();
-        //        ShiftVal = (byte)(HasFoundFit ? BestFitOffset : NumberInsertLocation);
-        //    }
-
-
-        //    return StartingBits.ToInt32();
-        //}
-
-        //private int GetMinLength(int val)
-        //{
-        //    for (int i = 28; i >= 0; i -= 4)
-        //        if ((val >> i) > 0)
-        //            return i + 4;
-        //    return 0;
-        //}
-        
-        internal void Read(Stream BCSV)
-        {
-            Fields = new Dictionary<uint, BCSVField>();
-            Entries = new List<BCSVEntry>();
-
-            int entrycount = BitConverter.ToInt32(BCSV.ReadReverse(0, 4), 0);
-            //Console.Write($"{entrycount} Entries ");
-            int fieldcount = BitConverter.ToInt32(BCSV.ReadReverse(0, 4), 0);
-            //Console.WriteLine($"done with {fieldcount} fields");
-            uint dataoffset = BitConverter.ToUInt32(BCSV.ReadReverse(0, 4), 0);
-            uint entrysize = BitConverter.ToUInt32(BCSV.ReadReverse(0, 4), 0);
-
-            //Console.WriteLine("Loading Fields:");
-            for (int i = 0; i < fieldcount; i++)
-            {
-                BCSVField currentfield = new BCSVField(BCSV);
-                Fields.Add(currentfield.HashName, currentfield);
-                //Console.Write($"\r{Math.Min(((float)(i + 1) / (float)fieldcount) * 100.0f, 100.0f)}%          ");
-            }
-            //Console.WriteLine("Complete!");
-
-            //Console.WriteLine("Loading Entries:");
-            for (int i = 0; i < entrycount; i++)
-            {
-                BCSVEntry currententry = new BCSVEntry(BCSV, Fields, dataoffset + (entrycount * entrysize));
-                Entries.Add(currententry);
-                BCSV.Position += entrysize;
-
-                //Console.Write($"\r{Math.Min(((float)(i + 1) / (float)entrycount) * 100.0f, 100.0f)}%          ");
-            }
-            //Console.WriteLine("Complete!");
-        }
-        
-        private List<KeyValuePair<uint, BCSVField>> GenerateSortedFields(List<KeyValuePair<uint, BCSVField>> original)
-        {
-            List<KeyValuePair<uint, BCSVField>> Float = new List<KeyValuePair<uint, BCSVField>>(),
-                Int32 = new List<KeyValuePair<uint, BCSVField>>(),
-                Int16 = new List<KeyValuePair<uint, BCSVField>>(),
-                Byte = new List<KeyValuePair<uint, BCSVField>>(),
-                String = new List<KeyValuePair<uint, BCSVField>>(),
-                Uint32 = new List<KeyValuePair<uint, BCSVField>>();
-            for (int i = 0; i < original.Count; i++)
-            {
-                switch (original[i].Value.DataType)
+                Strm.Position = dataoffset + (entrysize * i) + field.EntryOffset;
+                switch (field.DataType)
                 {
                     case DataTypes.INT32:
-                        Int32.Add(original[i]);
-                        break;
-                    case DataTypes.FLOAT:
-                        Float.Add(original[i]);
-                        break;
-                    case DataTypes.UINT32:
-                        Uint32.Add(original[i]);
-                        break;
-                    case DataTypes.INT16:
-                        Int16.Add(original[i]);
-                        break;
-                    case DataTypes.BYTE:
-                        Byte.Add(original[i]);
-                        break;
-                    case DataTypes.STRING:
-                        String.Add(original[i]);
+                        e.Data.Add(field.HashName, (int)((Strm.ReadInt32() & field.Bitmask) >> field.ShiftAmount));
                         break;
                     case DataTypes.CHARARRAY:
+                        Strm.Read(charreadarray);
+                        string s = Encoding.GetString(charreadarray);
+                        e.Data.Add(field.HashName, s);
+                        break;
+                    case DataTypes.FLOAT:
+                        float f = Strm.ReadSingle();
+                        e.Data.Add(field.HashName, f);
+                        break;
+                    case DataTypes.UINT32:
+                        e.Data.Add(field.HashName, (Strm.ReadUInt32() & field.Bitmask) >> field.ShiftAmount);
+                        break;
+                    case DataTypes.INT16:
+                        e.Data.Add(field.HashName, (short)((Strm.ReadInt16() & field.Bitmask) >> field.ShiftAmount));
+                        break;
+                    case DataTypes.BYTE:
+                        e.Data.Add(field.HashName, (byte)(((byte)Strm.ReadByte() & field.Bitmask) >> field.ShiftAmount));
+                        break;
+                    case DataTypes.STRING:
+                        uint Offset = Strm.ReadUInt32();
+                        Strm.Position = stringtable + Offset;
+                        e.Data.Add(field.HashName, Strm.ReadString(Encoding));
+                        break;
                     case DataTypes.NULL:
                     default:
-                        throw new Exception();
+                        throw new NullReferenceException();
                 }
             }
+            Entries.Add(e);
+        }
+    }
 
-            List<KeyValuePair<uint, BCSVField>> result = new List<KeyValuePair<uint, BCSVField>>();
-            result.AddRange(Float);
-            result.AddRange(Int32);
-            result.AddRange(Uint32);
-            result.AddRange(String);
-            result.AddRange(Int16);
-            result.AddRange(Byte);
-            return result;
+    /// <inheritdoc/>
+    /// <exception cref="InternalBufferOverflowException"></exception>
+    /// <exception cref="InvalidCastException"></exception>
+    /// <exception cref="ArgumentException"></exception>
+    public virtual void Save(Stream Strm)
+    {
+        BCSV c = this;
+        OnSaveFieldCalculator(ref c);
+        ushort entrysize = CalcEntrySize();
+        while (entrysize % 4 != 0)
+            entrysize++;
+
+        #region Collect the strings
+        List<string> Strings = [];// { "5324" };
+        foreach (Field field in Fields.Values)
+        {
+            if (field.DataType != DataTypes.STRING) //CHARARRAY doesn't count towards this
+                continue;
+            for (int e = 0; e < EntryCount; e++)
+            {
+                string str = (string)this[e][field];
+                if (!Strings.Contains(str))
+                    Strings.Add(str);
+            }
+        }
+        #endregion
+
+        Strm.WriteInt32(EntryCount);
+        Strm.WriteInt32(FieldCount);
+        Strm.WritePlaceholder(4);
+        Strm.WriteInt32(entrysize);
+
+        foreach (Field field in Fields.Values)
+        {
+            Strm.WriteUInt32(field.HashName);
+            Strm.WriteUInt32(field.Bitmask);
+            Strm.WriteUInt16(field.EntryOffset);
+            Strm.WriteByte(field.ShiftAmount);
+            Strm.WriteByte((byte)field.DataType);
+        }
+        //Is this even needed?
+        Strm.PadTo(0x04);
+
+        uint DataPos = (uint)Strm.Position;
+        for (int entryID = 0; entryID < EntryCount; entryID++)
+        {
+            Entry entry = Entries[entryID];
+            long basepos = Strm.Position;
+            Strm.Write(new byte[entrysize], 0, entrysize); //Needed for masking and stuff
+            foreach (Field field in Fields.Values)
+            {
+                Strm.Position = basepos + field.EntryOffset;
+                object obj = entry[field];
+                switch (field.DataType)
+                {
+                    case DataTypes.INT32:
+                        {
+                            if (obj is not int i)
+                                throw new ArgumentException(string.Format(JMapException.INCORRECT_DATATYPE_ERROR, obj.GetType().Name, typeof(int).Name));
+                            int cur = (int)(Strm.Peek(StreamUtil.ReadInt32) & ~field.Bitmask);
+                            int tar = (int)((i << field.ShiftAmount) & field.Bitmask);
+                            Strm.WriteInt32(tar | cur);
+                        }
+                        break;
+                    case DataTypes.CHARARRAY:
+                        byte[] ba;
+                        if (obj is char[] ca)
+                            ba = Encoding.GetBytes(ca);
+                        else if (obj is string str)
+                            ba = Encoding.GetBytes(str);
+                        else
+                            throw new InvalidCastException(string.Format(JMapException.INCORRECT_DATATYPE_ERROR, obj.GetType().Name, $"{typeof(char[]).Name}/{typeof(string).Name}"));
+                        if (ba.Length > 32)
+                            throw new InternalBufferOverflowException(string.Format(JMapException.CHARARRAY_TOO_BIG_ERROR, ba.Length, JMapException.MAX_CHARARRAY_SIZE));
+                        Strm.Write(new ReadOnlySpan<byte>(ba));
+                        break;
+                    case DataTypes.FLOAT:
+                        if (obj is not float f)
+                            throw new ArgumentException(string.Format(JMapException.INCORRECT_DATATYPE_ERROR, obj.GetType().Name, typeof(float).Name));
+                        Strm.WriteSingle(f);
+                        break;
+                    case DataTypes.UINT32:
+                        {
+                            if (obj is not uint ui)
+                                throw new ArgumentException(string.Format(JMapException.INCORRECT_DATATYPE_ERROR, obj.GetType().Name, typeof(uint).Name));
+                            uint cur = (uint)(Strm.Peek(StreamUtil.ReadInt32) & ~field.Bitmask);
+                            uint tar = (ui << field.ShiftAmount) & field.Bitmask;
+                            Strm.WriteUInt32(tar | cur);
+                        }
+                        break;
+                    case DataTypes.INT16:
+                        {
+                            if (obj is not short s)
+                                throw new ArgumentException(string.Format(JMapException.INCORRECT_DATATYPE_ERROR, obj.GetType().Name, typeof(short).Name));
+                            short cur = (short)(Strm.Peek(StreamUtil.ReadInt16) & ~field.Bitmask);
+                            short tar = (short)((s << field.ShiftAmount) & field.Bitmask);
+                            Strm.WriteInt16((short)(tar | cur));
+                        }
+                        break;
+                    case DataTypes.BYTE:
+                        {
+                            if (obj is not byte b)
+                                throw new ArgumentException(string.Format(JMapException.INCORRECT_DATATYPE_ERROR, obj.GetType().Name, typeof(byte).Name));
+                            byte cur = (byte)(Strm.PeekByte() & ~field.Bitmask);
+                            byte tar = (byte)((b << field.ShiftAmount) & field.Bitmask);
+                            Strm.WriteByte((byte)(tar | cur));
+                        }
+                        break;
+                    case DataTypes.STRING:
+                        if (obj is not string str2)
+                            throw new ArgumentException(string.Format(JMapException.INCORRECT_DATATYPE_ERROR, obj.GetType().Name, typeof(string).Name));
+
+                        uint StringOffset = 0;
+                        for (int j = 0; j < Strings.Count; j++)
+                        {
+                            string curstr = Strings[j];
+                            if (str2.Equals(curstr))
+                            {
+                                Strm.WriteUInt32(StringOffset);
+                                break;
+                            }
+                            StringOffset += (uint)(Encoding.GetByteCount(curstr) + 1);
+                        }
+                        break;
+                    case DataTypes.NULL:
+                    default:
+                        throw new NullReferenceException(string.Format(JMapException.INVALID_DATATYPE_ERROR, field.DataType));
+                }
+            }
+            Strm.PadTo(0x04);
+            Strm.Position = basepos + entrysize;
         }
 
-        //=====================================================================
+        for (int i = 0; i < Strings.Count; i++)
+        {
+            Strm.WriteString(Strings[i], Encoding);
+        }
+        Strm.PadTo(16, 0x40);
+        long EndPosition = Strm.Position;
 
-        /// <summary>
-        /// Cast a BCSV to a RARCFile
-        /// </summary>
-        /// <param name="x"></param>
-        public static implicit operator RARC.RARC.File(BCSV x) => new RARC.RARC.File(x.FileName, x.Save());
+        Strm.Position = 0x08;
+        Strm.WriteUInt32(DataPos);
 
-        /// <summary>
-        /// Cast a RARCFile to a BCSV
-        /// </summary>
-        /// <param name="x"></param>
-        public static implicit operator BCSV(RARC.RARC.File x) => new BCSV((MemoryStream)x) { FileName = x.Name };
-
-        //=====================================================================
+        Strm.Position = EndPosition;
     }
+
+    /// <summary>
+    /// Override this if you need to have it load a different class instead of BCSV.Entry
+    /// </summary>
+    /// <returns></returns>
+    protected virtual Entry CreateEntry() => new();
 
     /// <summary>
     /// A BCSV Field. Use one to define how Data in BCSVEntry objects is managed while saving
     /// </summary>
-    public class BCSVField
+    public sealed class Field
     {
         /// <summary>
         /// The numerical hash representation of the field name.
@@ -545,7 +500,8 @@ namespace Hack.io.BCSV
         /// </summary>
         public DataTypes DataType { get; set; }
         /// <summary>
-        /// The number that determines how the value is read from the file
+        /// The number that determines how the value is read from the file.<para/>
+        /// Can be manually calculated, but if you choose to do that, you should manually calculate the Bitmask, ShiftAmount, and EntryOffset for all fields in the BCSV
         /// </summary>
         public uint Bitmask
         {
@@ -559,7 +515,8 @@ namespace Hack.io.BCSV
         }
         private uint _Bitmask = 0xFFFFFFFF;
         /// <summary>
-        /// The number of bits to shift while reading the value from the file
+        /// The number of bits to shift while reading the value from the file.<para/>
+        /// Can be manually calculated, but if you choose to do that, you should manually calculate the Bitmask, ShiftAmount, and EntryOffset for all fields in the BCSV
         /// </summary>
         public byte ShiftAmount
         {
@@ -573,332 +530,202 @@ namespace Hack.io.BCSV
         }
         private byte _ShiftAmount;
         /// <summary>
-        /// The offset within the binary entry that this field is located at. Automatically calculated while saving.
+        /// The offset within the binary entry that this field is located at.<para/>
+        /// Can be manually calculated, but if you choose to do that, you should manually calculate the Bitmask, ShiftAmount, and EntryOffset for all fields in the BCSV
         /// </summary>
-        public ushort EntryOffset { get; internal set; }
+        public ushort EntryOffset { get; set; }
         /// <summary>
-        /// Setting this to true will auto-recalculate the Bitmask and Shift Amount on Save
+        /// Setting this to true will auto-recalculate the Bitmask and Shift Amount on save
         /// </summary>
         public bool AutoRecalc { get; set; }
 
         /// <summary>
-        /// Create a new, empty BCSV Field
-        /// </summary>
-        public BCSVField() { }
-        /// <summary>
-        /// Create a new BCSV field while also setting values
-        /// </summary>
-        /// <param name="hash">The field hash</param>
-        /// <param name="type">The data type</param>
-        /// <param name="bitmask"></param>
-        /// <param name="shift"></param>
-        /// <param name="Auto">Sets AutoRecalc to True. The bitmask and shift will be calculated automatically</param>
-        public BCSVField(uint hash, DataTypes type, uint bitmask = 0xFFFFFFFF, byte shift = 0, bool Auto = true) => Init(hash, type,bitmask, shift, Auto);
-        /// <summary>
-        /// Create a new BCSV field while also setting values. Set the field hash using a string instead of a hash
-        /// </summary>
-        /// <param name="fieldname"></param>
-        /// <param name="type">The data type</param>
-        /// <param name="bitmask"></param>
-        /// <param name="shift"></param>
-        /// <param name="Auto">Sets AutoRecalc to True. The bitmask and shift will be calculated automatically</param>
-        public BCSVField(string fieldname, DataTypes type, uint bitmask = 0xFFFFFFFF, byte shift = 0, bool Auto = true) => Init(BCSV.FieldNameToHash(fieldname), type,bitmask, shift, Auto);
-
-        internal BCSVField(Stream BCSV)
-        {
-            HashName = BitConverter.ToUInt32(BCSV.ReadReverse(0, 4), 0);
-            Bitmask = BitConverter.ToUInt32(BCSV.ReadReverse(0, 4), 0);
-            EntryOffset = BitConverter.ToUInt16(BCSV.ReadReverse(0, 2), 0);
-            ShiftAmount = (byte)BCSV.ReadByte();
-            DataType = (DataTypes)BCSV.ReadByte();
-        }
-
-        internal void Write(Stream BCSV)
-        {
-            BCSV.WriteReverse(BitConverter.GetBytes(HashName), 0, 4);
-            BCSV.WriteReverse(BitConverter.GetBytes(Bitmask), 0, 4);
-            BCSV.WriteReverse(BitConverter.GetBytes(EntryOffset), 0, 2);
-            BCSV.WriteByte(ShiftAmount);
-            BCSV.WriteByte((byte)DataType);
-        }
-        /// <summary>
         /// Gets the default value for this BCSVField's DataType
         /// </summary>
         /// <returns>The default value for this field's DataType</returns>
-        public object GetDefaultValue() => GetDefaultValue(DataType);
-        /// <summary>
-        /// Gets the default value of the given DataType
-        /// </summary>
-        /// <param name="type">the DataType to get the default for</param>
-        /// <returns>The default value of the DataType</returns>
-        public static object GetDefaultValue(DataTypes type)
-        {
-            switch (type)
-            {
-                case DataTypes.INT32:
-                    return default(int);
-                case DataTypes.FLOAT:
-                    return default(float);
-                case DataTypes.UINT32:
-                    return default(uint);
-                case DataTypes.INT16:
-                    return default(short);
-                case DataTypes.BYTE:
-                    return default(byte);
-                case DataTypes.STRING:
-                    return "";
-                default:
-                    return null;
-            }
-        }
+        public object GetDefaultValue() => BCSV.GetDefaultValue(DataType);
 
-        private void Init(uint hash, DataTypes type, uint bitmask, byte shift, bool Auto)
-        {
-            HashName = hash;
-            Bitmask = bitmask;
-            ShiftAmount = shift;
-            DataType = type;
-            AutoRecalc = Auto;
-        }
-
-        /// <summary>
-        /// Returns a string that represents the current object
-        /// </summary>
-        /// <returns></returns>
-        public override string ToString() => $"0x{HashName.ToString("X8")} - {DataType.ToString()}";
-        /// <summary>
-        /// Compares this BCSVField to another BCSVField.<para/>NOTE: This check excludes AutoRecalc and the Automatically Calculated Entry Offset variable
-        /// </summary>
-        /// <param name="obj"></param>
-        /// <returns></returns>
-        public override bool Equals(object obj)
-        {
-            return obj is BCSVField field &&
+        /// <inheritdoc/>
+        public override string ToString() => $"0x{HashName:X8} - {DataType}";
+        /// <inheritdoc/>
+        public override bool Equals(object? obj) => obj is Field field &&
                    HashName == field.HashName &&
                    DataType == field.DataType &&
+                   EntryOffset == field.EntryOffset &&
                    _Bitmask == field._Bitmask &&
-                   _ShiftAmount == field._ShiftAmount;
-        }
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="field1"></param>
-        /// <param name="field2"></param>
-        /// <returns></returns>
-        public static bool operator ==(BCSVField field1, BCSVField field2) => field1.Equals(field2);
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="field1"></param>
-        /// <param name="field2"></param>
-        /// <returns></returns>
-        public static bool operator !=(BCSVField field1, BCSVField field2) => !field1.Equals(field2);
-        /// <summary>
-        /// Auto Generated by Visual Studio
-        /// </summary>
-        /// <returns></returns>
-        public override int GetHashCode()
-        {
-            var hashCode = -2117134392;
-            hashCode = hashCode * -1521134295 + HashName.GetHashCode();
-            hashCode = hashCode * -1521134295 + DataType.GetHashCode();
-            hashCode = hashCode * -1521134295 + _Bitmask.GetHashCode();
-            hashCode = hashCode * -1521134295 + _ShiftAmount.GetHashCode();
-            hashCode = hashCode * -1521134295 + EntryOffset.GetHashCode();
-            hashCode = hashCode * -1521134295 + AutoRecalc.GetHashCode();
-            return hashCode;
-        }
+                   _ShiftAmount == field._ShiftAmount &&
+                   AutoRecalc == field.AutoRecalc;
+        /// <inheritdoc/>
+        public override int GetHashCode() => HashCode.Combine(HashName, DataType, _Bitmask, _ShiftAmount, EntryOffset, AutoRecalc);
     }
     /// <summary>
     /// A BCSV Entry. Use one of these to store data as defined by the BCSV Fields
     /// </summary>
-    public class BCSVEntry
+    public class Entry
     {
         /// <summary>
         /// The Data held in this BCSVEntry. The Key is the Hash that the Data Value belongs to
         /// </summary>
-        public Dictionary<uint, object> Data { get; set; }
+        protected internal Dictionary<uint, object> Data { get; set; } = [];
         /// <summary>
-        /// Create an empty BCSV Entry
+        /// The encoding to use while handling text. Should only realistically be <see cref="StreamUtil.ShiftJIS"/> or <see cref="Encoding.UTF8"/>
         /// </summary>
-        public BCSVEntry() => Data = new Dictionary<uint, object>();
+        protected internal Encoding Encoding { get; set; } = StreamUtil.ShiftJIS;
+
         /// <summary>
-        /// Create a new entry with the provided Dictionary of fields
+        /// Access the data inside this BCSV Entry
         /// </summary>
-        /// <param name="FieldSource">The dictionary of fields</param>
-        public BCSVEntry(Dictionary<uint, BCSVField> FieldSource)
+        /// <param name="field">The field to get from the entry</param>
+        /// <returns>the data for the requested field in this entry</returns>
+        public object this[Field field]
         {
-            Data = new Dictionary<uint, object>();
-            foreach (KeyValuePair<uint, BCSVField> field in FieldSource)
-                Data.Add(field.Key, field.Value.GetDefaultValue());
-        }
-        internal BCSVEntry(Stream BCSV, Dictionary<uint, BCSVField> fields, long StringOffset)
-        {
-            long EntryStartPosition = BCSV.Position;
-            Data = new Dictionary<uint, object>();
-            for (int i = 0; i < fields.Count; i++)
+            get
             {
-                BCSV.Position = EntryStartPosition + fields.ElementAt(i).Value.EntryOffset;
-                switch (fields.ElementAt(i).Value.DataType)
-                {
-                    case DataTypes.INT32:
-                        int readvalue = BitConverter.ToInt32(BCSV.ReadReverse(0, 4), 0);
-                        uint Bitmask = fields.ElementAt(i).Value.Bitmask;
-                        byte Shift = fields.ElementAt(i).Value.ShiftAmount;
-                        Data.Add(fields.ElementAt(i).Key, (int)((readvalue & Bitmask) >> Shift));
-                        break;
-                    case DataTypes.CHARARRAY:
-                        Data.Add(fields.ElementAt(i).Key, null);
-                        Console.WriteLine("=== WARNING ===");
-                        Console.WriteLine("BCSV Entry is of the UNKNOWN type (0x01). This shouldn't happen.");
-                        break;
-                    case DataTypes.FLOAT:
-                        Data.Add(fields.ElementAt(i).Key, BitConverter.ToSingle(BCSV.ReadReverse(0, 4), 0));
-                        break;
-                    case DataTypes.UINT32:
-                        Data.Add(fields.ElementAt(i).Key, BitConverter.ToUInt32(BCSV.ReadReverse(0, 4), 0));
-                        break;
-                    case DataTypes.INT16:
-                        Data.Add(fields.ElementAt(i).Key, BitConverter.ToInt16(BCSV.ReadReverse(0, 2), 0));
-                        break;
-                    case DataTypes.BYTE:
-                        Data.Add(fields.ElementAt(i).Key, (byte)BCSV.ReadByte());
-                        break;
-                    case DataTypes.STRING:
-                        BCSV.Position = StringOffset + BitConverter.ToUInt32(BCSV.ReadReverse(0, 4), 0);
-                        Data.Add(fields.ElementAt(i).Key, BCSV.ReadString());
-                        break;
-                    case DataTypes.NULL:
-                        Data.Add(fields.ElementAt(i).Key, null);
-                        Console.WriteLine("=== WARNING ===");
-                        Console.WriteLine("BCSV Entry is of the NULL type (0x07). This shouldn't happen.");
-                        break;
-                }
+                if (!Data.TryGetValue(field.HashName, out object? value))
+                    throw new IndexOutOfRangeException(string.Format(JMapException.FIELD_DOES_NOT_EXIST_ERROR, field.HashName));
+                return value;
             }
-            BCSV.Position = EntryStartPosition;
-        }
-
-        internal void Save(Stream BCSV, Dictionary<uint, BCSVField> fields, uint DataLength, List<string> Strings)
-        {
-            long OriginalPosition = BCSV.Position;
-            BCSV.Write(new byte[DataLength], 0, (int)DataLength);
-            foreach (KeyValuePair<uint, BCSVField> Field in fields)
-            {
-                BCSV.Position = OriginalPosition + Field.Value.EntryOffset;
-                Encoding enc = Encoding.GetEncoding(932);
-                if (Data.ContainsKey(Field.Key))
-                {
-                    switch (Field.Value.DataType)
-                    {
-                        case DataTypes.INT32:
-                            if (Field.Value.Bitmask != 0xFFFFFFFF)
-                                BCSV.WriteReverse(BitConverter.GetBytes((int.Parse(Data[Field.Key].ToString()) << Field.Value.ShiftAmount) & (int)Field.Value.Bitmask), 0, 4);
-                            else
-                                BCSV.WriteReverse(BitConverter.GetBytes(int.Parse(Data[Field.Key].ToString())), 0, 4);
-                            break;
-                        case DataTypes.CHARARRAY:
-
-                            if (Data[Field.Key] is string Str)
-                                WriteCharArrayFromString(Str);
-                            else if (Data[Field.Key] is char[] chararray)
-                                WriteCharArrayFromString(chararray.ToString());
-                            else
-                                throw new Exception("Error type for CHARARRAY.");
-
-                            void WriteCharArrayFromString(string STRING)
-                            {
-
-                                byte[] data = enc.GetBytes(STRING);
-                                if (data.Length > 32)
-                                    throw new Exception($"The string \"{STRING}\" encodes to a length of {data.Length}, while the max length is 32!");
-                                BCSV.Write(data, 0, data.Length);
-                            }
-                            break;
-                        case DataTypes.FLOAT:
-                            BCSV.WriteReverse(BitConverter.GetBytes((float)Data[Field.Key]), 0, 4);
-                            break;
-                        case DataTypes.UINT32:
-                            BCSV.WriteReverse(BitConverter.GetBytes((uint)Data[Field.Key]), 0, 4);
-                            break;
-                        case DataTypes.INT16:
-                            BCSV.WriteReverse(BitConverter.GetBytes((short)Data[Field.Key]), 0, 2);
-                            break;
-                        case DataTypes.BYTE:
-                            BCSV.WriteByte((byte)Data[Field.Key]);
-                            break;
-                        case DataTypes.STRING:
-                            uint StringOffset = 0;
-                            for (int j = 0; j < Strings.Count; j++)
-                            {
-                                if (Strings[j].Equals((string)Data[Field.Key]))
-                                {
-                                    BCSV.WriteReverse(BitConverter.GetBytes(StringOffset), 0, 4);
-                                    break;
-                                }
-                                StringOffset += (uint)(enc.GetBytes(Strings[j]).Length + 1);
-                            }
-                            break;
-                        case DataTypes.NULL:
-                            break;
-                    }
-                }
-            }
-            BCSV.Position = OriginalPosition + DataLength;
-        }
-
-        /// <summary>
-        /// Shortcut to Data[hash]
-        /// </summary>
-        /// <param name="hash">The hash to get</param>
-        /// <returns></returns>
-        public object this[uint hash]
-        {
-            get { return Data[hash]; }
             set
             {
-                if (!(value is int) && !(value is float) && !(value is uint) && !(value is short) && !(value is byte) && !(value is string))
-                    throw new Exception($"The provided object is not supported by BCSV. Value is of type \"{value.GetType().ToString()}\"");
-                Data[hash] = value;
+                if (!Data.ContainsKey(field.HashName))
+                    throw new IndexOutOfRangeException(string.Format(JMapException.FIELD_DOES_NOT_EXIST_ERROR, field.HashName));
+                ArgumentNullException.ThrowIfNull(value);
+                switch (field.DataType)
+                {
+                    case DataTypes.INT32:
+                        {
+                            if (value is uint u)
+                                value = (int)u;
+                            else if (value is short s)
+                                value = (int)s;
+                            else if (value is ushort us)
+                                value = (int)us;
+                            else if (value is byte b)
+                                value = (int)b;
+                            else if (value is sbyte sb)
+                                value = (int)sb;
+                        }
+
+                        if (value is not int)
+                            throw new ArgumentException(string.Format(JMapException.INCORRECT_DATATYPE_ERROR, value.GetType().Name, typeof(int).Name));
+                        break;
+                    case DataTypes.CHARARRAY:
+                        if (value is char[] ca)
+                        {
+                            int count = Encoding.GetByteCount(ca);
+                            if (count > JMapException.MAX_CHARARRAY_SIZE)
+                                throw new ArgumentOutOfRangeException(nameof(value), string.Format(JMapException.CHARARRAY_TOO_BIG_ERROR, count, JMapException.MAX_CHARARRAY_SIZE));
+                        }
+
+                        if (value is string str)
+                        {
+                            int count = Encoding.GetByteCount(str);
+                            if (count > JMapException.MAX_CHARARRAY_SIZE)
+                                throw new ArgumentOutOfRangeException(nameof(value), string.Format(JMapException.CHARARRAY_TOO_BIG_ERROR, count, JMapException.MAX_CHARARRAY_SIZE));
+                        }
+
+                        if (value is not string or char[])
+                            throw new ArgumentException(string.Format(JMapException.INCORRECT_DATATYPE_ERROR, value.GetType().Name, $"{typeof(char[]).Name}/{typeof(string).Name}"));
+                        break;
+                    case DataTypes.FLOAT:
+                        if (value is Half h)
+                            value = (float)h;
+                        if (value is not float)
+                            throw new ArgumentException(string.Format(JMapException.INCORRECT_DATATYPE_ERROR, value.GetType().Name, typeof(float).Name));
+                        break;
+                    case DataTypes.UINT32:
+                        {
+                            if (value is int u)
+                                value = (uint)u;
+                            else if (value is short s)
+                                value = (uint)s;
+                            else if (value is ushort us)
+                                value = (uint)us;
+                            else if (value is byte b)
+                                value = (uint)b;
+                            else if (value is sbyte sb)
+                                value = (uint)sb;
+                        }
+
+                        if (value is not uint)
+                            throw new ArgumentException(string.Format(JMapException.INCORRECT_DATATYPE_ERROR, value.GetType().Name, typeof(uint).Name));
+                        break;
+                    case DataTypes.INT16:
+                        {
+                            if (value is uint u && u <= ushort.MaxValue && u >= ushort.MinValue)
+                                value = (ushort)u;
+                            else if (value is int i && i <= short.MaxValue && i >= short.MinValue)
+                                value = (short)i;
+                            if (value is ushort us)
+                                value = (short)us;
+                            else if (value is byte b)
+                                value = (short)b;
+                            else if (value is sbyte sb)
+                                value = (short)sb;
+                        }
+
+                        if (value is not short)
+                            throw new ArgumentException(string.Format(JMapException.INCORRECT_DATATYPE_ERROR, value.GetType().Name, typeof(short).Name));
+                        Data[field.HashName] = value;
+                        break;
+                    case DataTypes.BYTE:
+                        {
+                            if (value is uint u && u <= byte.MaxValue && u >= byte.MinValue)
+                                value = (byte)u;
+                            else if (value is int i && i <= sbyte.MaxValue && i >= sbyte.MinValue)
+                                value = (sbyte)i;
+                            else if (value is ushort us && us <= byte.MaxValue && us >= byte.MinValue)
+                                value = (byte)us;
+                            else if (value is short s && s <= sbyte.MaxValue && s >= sbyte.MinValue)
+                                value = (sbyte)s;
+
+                            if (value is sbyte sb)
+                                value = (byte)sb;
+                        }
+
+                        if (value is not byte)
+                            throw new ArgumentException(string.Format(JMapException.INCORRECT_DATATYPE_ERROR, value.GetType().Name, typeof(short).Name));
+                        break;
+                    case DataTypes.STRING:
+                        if (value is float or Half or uint or int or ushort or short or byte or sbyte)
+                            value = value.ToString() ?? "&";
+
+                        if (value is char[] ca2)
+                            value = new string(ca2);
+
+                        if (value is not string)
+                            throw new ArgumentException(string.Format(JMapException.INCORRECT_DATATYPE_ERROR, value.GetType().Name, typeof(short).Name));
+                        break;
+                    case DataTypes.NULL:
+                    default:
+                        throw new NullReferenceException(string.Format(JMapException.INVALID_DATATYPE_ERROR, field.DataType));
+                }
+                Data[field.HashName] = value;
             }
         }
-
-        internal void FillMissingFields(Dictionary<uint, BCSVField> fields)
+        
+        /// <summary>
+        /// Copies the data from this Entry to another Entry
+        /// </summary>
+        /// <param name="Target">The entry to copy the data onto</param>
+        public void CopyTo(Entry Target)
         {
-            for (int i = 0; i < fields.Count; i++)
-                if (!Data.ContainsKey(fields.ElementAt(i).Key))
-                    Data.Add(fields.ElementAt(i).Key, fields.ElementAt(i).Value.GetDefaultValue());
+            Target.Encoding = Encoding;
+            Target.Data = new(Data);
         }
+
         /// <summary>
-        /// Checks if this BCSV Contains data for a given hash
-        /// </summary>
-        /// <param name="hash">The hash to look for</param>
-        /// <returns>true if data for the hash has been found, false if it has not been found</returns>
-        public bool ContainsKey(uint hash) => Data.ContainsKey(hash);
-        /// <summary>
-        /// Checks if this BCSV Contains data for a given <see cref="BCSVField.HashName"/>
-        /// </summary>
-        /// <param name="Field">The <see cref="BCSVField.HashName"/> to check</param>
-        /// <returns>true if data for the <see cref="BCSVField.HashName"/> has been found, false if it has not been found</returns>
-        public bool ContainsKey(BCSVField Field) => Data.ContainsKey(Field.HashName);
-        /// <summary>
-        /// Gets the value associated with the specified hash, if it exists
-        /// </summary>
-        /// <param name="hash">The hash of the value to get.</param>
-        /// <param name="value">When this method returns, contains the value associated with the specified key, if the key is found; otherwise, the default value for the type of the value parameter. This parameter is passed uninitialized.</param>
-        /// <returns></returns>
-        public bool TryGetValue(uint hash, out object value) => Data.TryGetValue(hash, out value);
-        /// <summary>
-        /// Attempt to load data from the Clipboard
+        /// Attempt to load data from a Clipboard string
         /// </summary>
         /// <param name="input">The Clipboard input string</param>
+        /// <param name="Head">The head to try and paste with (for validation purposes)</param>
         /// <returns>true if successful</returns>
-        public bool FromClipboard(string input)
+        public bool FromClipboard(string input, string Head = "BCSVEntry")
         {
-            if (!input.StartsWith("BCSVEntry|"))
+            if (!input.StartsWith(Head+"|"))
                 return false;
 
-            int DataIndex = 0;
-            Dictionary<uint, object> backup = Data;
+            Dictionary<uint, object> backup = new(Data);
             try
             {
                 string[] DataSplit = input.Split('|');
@@ -907,9 +734,15 @@ namespace Hack.io.BCSV
                 for (int i = 1; i < DataSplit.Length; i++)
                 {
                     string[] currentdata = DataSplit[i].Split('%');
-                    DataIndex = i;
                     if (uint.TryParse(currentdata[0], System.Globalization.NumberStyles.HexNumber, null, out uint result))
-                        Data.Add(result, Convert.ChangeType(currentdata[1], Type.GetType("System." + currentdata[2], true)));
+                    {
+                        Type? t = Type.GetType("System." + currentdata[2], true) ?? throw new NullReferenceException($"Failed to map {currentdata[2]} to a system property");
+                        Data.Add(result, Convert.ChangeType(currentdata[1], t));
+                    }
+                    else
+                    {
+                        throw new IOException($"Failed to decode {currentdata[0]} as Hex");
+                    }
                 }
             }
             catch (Exception)
@@ -921,63 +754,83 @@ namespace Hack.io.BCSV
             return true;
         }
         /// <summary>
-        /// Copies this BCSVEntry into the clipboard as a string
+        /// Create a BCSV string that can be copied to the clipboard
         /// </summary>
+        /// <param name="Head">The head to use in the copy (for validation purposes)</param>
         /// <returns></returns>
-        public string ToClipboard()
+        public string ToClipboard(string Head = "BCSVEntry")
         {
-            string clip = "BCSVEntry";
-            for (int i = 0; i < Data.Count; i++)
-                clip += "|" + Data.ElementAt(i).Key.ToString("X8") + "%" + Data.ElementAt(i).Value.ToString() + "%" + Data.ElementAt(i).Value.GetType().ToString().Replace("System.", "");
-            return clip;
+            StringBuilder sb = new();
+            sb.Append(Head);
+            foreach (var item in Data)
+            {
+                sb.Append('|');
+                sb.Append(item.Key.ToString("X8"));
+                sb.Append('%');
+                sb.Append(item.Value.ToString());
+                sb.Append('%');
+                sb.Append(item.Value.GetType().ToString().Replace("System.", ""));
+            }
+            return sb.ToString();
         }
-        /// <summary>
-        /// Creates a clone of this BCSVEntry
-        /// </summary>
-        /// <returns></returns>
-        public BCSVEntry Clone() => Clone(this);
 
         /// <summary>
-        /// Creates a clone of a BCSVEntry
+        /// Adds the value into the BCSV entry
         /// </summary>
-        /// <param name="SourceEntry"></param>
-        /// <returns></returns>
-        public static BCSVEntry Clone(BCSVEntry SourceEntry)
-        {
-            string data = SourceEntry.ToClipboard();
-            BCSVEntry entry = new BCSVEntry();
-            entry.FromClipboard(data);
-            return entry;
-        }
+        /// <param name="Hash"></param>
+        /// <param name="value"></param>
+        public void Add(uint Hash, object value) => Data.Add(Hash, value);
         /// <summary>
-        /// 
+        /// Tries to add the value into the BCSV Entry
         /// </summary>
-        /// <param name="Left"></param>
-        /// <param name="Right"></param>
+        /// <param name="Hash"></param>
+        /// <param name="value"></param>
         /// <returns></returns>
-        public static bool operator ==(BCSVEntry Left, BCSVEntry Right) => Left.Equals(Right);
+        public bool TryAdd(uint Hash, object value) => Data.TryAdd(Hash, value);
         /// <summary>
-        /// 
+        /// Checks to see if this BCSV Entry contains data for the given hash
         /// </summary>
-        /// <param name="Left"></param>
-        /// <param name="Right"></param>
-        /// <returns></returns>
-        public static bool operator !=(BCSVEntry Left, BCSVEntry Right) => !Left.Equals(Right);
-        /// <summary>
-        /// Auto-Generated
-        /// </summary>
-        /// <param name="obj">Object to compare to</param>
-        /// <returns></returns>
-        public override bool Equals(object obj) => obj is BCSVEntry entry && Hack.io.Util.GenericExtensions.Equals(Data, entry.Data);
+        /// <param name="Hash">the hash to look for</param>
+        /// <returns>TRUE if the data exists, FALSE otherwise</returns>
+        public bool Contains(uint Hash) => Data.ContainsKey(Hash);
 
         /// <summary>
-        /// Auto-Generated
+        /// Removes the data for the given hash
         /// </summary>
-        /// <returns></returns>
-        public override int GetHashCode() => -301143667 + EqualityComparer<Dictionary<uint, object>>.Default.GetHashCode(Data);
+        /// <param name="Hash"></param>
+        public void Remove(uint Hash) => Data.Remove(Hash);
+
+        /// <inheritdoc/>
+        public override bool Equals(object? obj)
+        {
+            return obj is Entry e &&
+                Encoding == e.Encoding &&
+                CollectionUtil.Equals(Data, e.Data);
+        }
+
+        /// <inheritdoc/>
+        public override int GetHashCode() => HashCode.Combine(Data, Encoding);
+
+        //Adds fields that are missing from the field dictionary
+        internal void FillMissingFields(Dictionary<uint, Field> fields)
+        {
+            foreach (Field item in fields.Values.Where(item => !Data.ContainsKey(item.HashName)))
+                Data.Add(item.HashName, GetDefaultValue(item.DataType));
+        }
+        //Removes fields that are missing from the field dictionary
+        internal void RemoveMissingFields(Dictionary<uint, Field> fields)
+        {
+            foreach (Field item in fields.Values)
+            {
+                if (Data.ContainsKey(item.HashName))
+                    continue;
+                Data.Remove(item.HashName);
+            }
+        }
     }
+
     /// <summary>
-    /// BCSVField Data Types
+    /// BCSV.Field Data Types
     /// </summary>
     public enum DataTypes : byte
     {
@@ -1010,8 +863,157 @@ namespace Hack.io.BCSV
         /// </summary>
         STRING = 6,
         /// <summary>
-        /// NULL. Don't use, as it cannot be written to a file.
+        /// Refers to NULL.<para/>DO NOT USE as it cannot be written to a file.
         /// </summary>
         NULL = 7
     }
+
+    /// <summary>
+    /// Represents a function that can be used to hash a string for BCSV purposes
+    /// </summary>
+    /// <param name="Str">The characters to hash</param>
+    /// <returns></returns>
+    public delegate uint BCSVHashFunction(ReadOnlySpan<char> Str);
+    /// <summary>
+    /// Converts a stringn to an Old Hash. Used in older Jsys games (Luigi's Mansion)
+    /// </summary>
+    /// <param name="Str">the string to convert</param>
+    /// <returns>the hashed of the string</returns>
+    public static uint StringToHash_Old(ReadOnlySpan<char> Str)
+    {
+        uint ret = 0;
+        for (int i = 0; i < Str.Length; i++)
+        {
+            ret *= (ret << 8) & 0xFFFFFFFF;
+            ret += Str[i];
+            ret %= 33554393;
+        }
+        return ret;
+    }
+    /// <summary>
+    /// Converts a stringn to a JGadget Hash. Used in newer Jsys games (SMG, SMG2, DKJB)
+    /// </summary>
+    /// <param name="Str">the string to convert</param>
+    /// <returns>the hashed of the string</returns>
+    public static uint StringToHash_JGadget(ReadOnlySpan<char> Str)
+    {
+        uint ret = 0;
+        for (int i = 0; i < Str.Length; i++)
+        {
+            ret *= 0x1F;
+            ret += Str[i];
+        }
+        return ret;
+    }
+
+    /// <summary>
+    /// Represents a function that can be used to calculate field data before saving.<para/>
+    /// Be aware that these will edit the BCSV field data.
+    /// </summary>
+    /// <param name="target"></param>
+    public delegate void FieldDataCalculator(ref BCSV target);
+    /// <summary>
+    /// The function used to organize the fields
+    /// </summary>
+    /// <param name="target">the target BCSV</param>
+    public static void CalculateFieldDataDefault(ref BCSV target)
+    {
+        //Basic, uncompressed BCSV organization
+        List<Field> SortedFields = [.. target.Fields.Values];
+        SortedFields.Sort(JGadgetFieldSort);
+
+        ushort entrysize = 0;
+        for (int i = 0; i < SortedFields.Count; i++)
+        {
+            Field currentfield = SortedFields[i];
+            if (currentfield.AutoRecalc)
+            {
+                currentfield.AutoRecalc = false;
+                currentfield.Bitmask = GetDefaultBitmask(currentfield.DataType);
+                currentfield.ShiftAmount = 0;
+                currentfield.EntryOffset = entrysize; //I leave it up to the user to make sure that "non autorecalc" fields mesh well...in other words it's either all manual or all automatic!
+            }
+            entrysize += GetDataTypeSize(currentfield.DataType);
+        }
+    }
+
+    /// <summary>
+    /// Gets the default value of the given DataType
+    /// </summary>
+    /// <param name="type">the DataTypes to get the default for</param>
+    /// <returns>The default value of the DataType</returns>
+    public static object GetDefaultValue(DataTypes type) => type switch
+    {
+        DataTypes.INT32 => default(int),
+        DataTypes.CHARARRAY => "", //Yes, I know it's a string.
+        DataTypes.FLOAT => default(float),
+        DataTypes.UINT32 => default(uint),
+        DataTypes.INT16 => default(short),
+        DataTypes.BYTE => default(byte),
+        DataTypes.STRING => "",
+        _ => throw new NullReferenceException(),
+    };
+    /// <summary>
+    /// Gets the default value for the bitmask of the given Data Type
+    /// </summary>
+    /// <param name="type">the DataTypes to get the default for</param>
+    /// <returns></returns>
+    /// <exception cref="NullReferenceException"></exception>
+    public static uint GetDefaultBitmask(DataTypes type) => type switch
+    {
+        DataTypes.INT32 or DataTypes.FLOAT or DataTypes.UINT32 or DataTypes.STRING => 0xFFFFFFFF,
+        DataTypes.CHARARRAY => 0x00000000,
+        DataTypes.INT16 => 0x0000FFFF,
+        DataTypes.BYTE => 0x000000FF,
+        _ => throw new NullReferenceException(),
+    };
+    /// <summary>
+    /// Gets the byte size of the given data type
+    /// </summary>
+    /// <param name="type">The type to get the size of</param>
+    /// <returns></returns>
+    /// <exception cref="NullReferenceException"></exception>
+    public static ushort GetDataTypeSize(DataTypes type) => type switch
+    {
+        DataTypes.INT32 or DataTypes.FLOAT or DataTypes.UINT32 or DataTypes.STRING => 0x04,
+        DataTypes.CHARARRAY => JMapException.MAX_CHARARRAY_SIZE,
+        DataTypes.INT16 => 0x02,
+        DataTypes.BYTE => 0x01,
+        _ => throw new NullReferenceException(),
+    };
+
+    /// <summary>
+    /// Determines the order of fields based on official format specs.<para/>This is a <see cref="Comparison{T}"/>
+    /// </summary>
+    /// <param name="L"></param>
+    /// <param name="R"></param>
+    /// <returns></returns>
+    /// <exception cref="NullReferenceException"></exception>
+    protected static int JGadgetFieldSort(Field L, Field R)
+    {
+        int LP = GetPriority(L.DataType), RP = GetPriority(R.DataType);
+        return LP.CompareTo(RP);
+
+        static int GetPriority(DataTypes DT) => DT switch
+        {
+            DataTypes.INT32 => 2,
+            DataTypes.CHARARRAY => 0,
+            DataTypes.FLOAT => 1,
+            DataTypes.UINT32 => 3,
+            DataTypes.INT16 => 4,
+            DataTypes.BYTE => 5,
+            DataTypes.STRING => 6,
+            _ => throw new NullReferenceException(),
+        };
+    }
+}
+
+internal static class JMapException //Not typically what this class is
+{
+    internal const int MAX_CHARARRAY_SIZE = 32;
+    internal const string INCORRECT_DATATYPE_ERROR = "The provided value is of the incorrect DataTypes ({0} != {1})";
+    internal const string FIELD_DOES_NOT_EXIST_ERROR = "This BCSV entry does not contain data for {0}";
+    internal const string CHARARRAY_TOO_BIG_ERROR = "Characters encode to more than {1} bytes. {0} > {1}";
+    internal const string INVALID_DATATYPE_ERROR = "DataTypes cannot be {0}";
+    internal const string FIELD_ALREADY_EXISTS_ERROR = "The BCSV already contains a field with hash {0}";
 }
