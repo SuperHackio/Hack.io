@@ -496,8 +496,8 @@ public class MSBF : ILoadSaveFile
 
     public enum Events
     {
-        EventFunc,
-        EventFunc_,
+        EventFuncAndChain,
+        EventFuncAndEnd,
         ChainToNextNode,
         ForwardFlow,
         AnimeFunc,
@@ -512,7 +512,7 @@ public class MSBF : ILoadSaveFile
 
     public static bool IsUseParameter(Events Event) => Event switch
     {
-        Events.EventFunc or Events.EventFunc_ or Events.AnimeFunc or Events.KillFunc => true,
+        Events.EventFuncAndChain or Events.EventFuncAndEnd or Events.AnimeFunc or Events.KillFunc => true,
         _ => false,
     };
 }
