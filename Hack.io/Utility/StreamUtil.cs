@@ -87,6 +87,13 @@ public static class StreamUtil
     /// </summary>
     /// <param name="Strm">The stream to read from</param>
     /// <returns>The resulting byte</returns>
+    [CLSCompliant(false)]
+    public static sbyte ReadInt8(this Stream Strm) => (sbyte)Strm.ReadByte();
+    /// <summary>
+    /// An alternative to <see cref="Stream.ReadByte"/>
+    /// </summary>
+    /// <param name="Strm">The stream to read from</param>
+    /// <returns>The resulting byte</returns>
     public static byte ReadUInt8(this Stream Strm) => (byte)Strm.ReadByte();
     /// <summary>
     /// Reads an Int16 from the stream. Respects Endian.
@@ -555,6 +562,13 @@ public static class StreamUtil
     /// </summary>
     /// <param name="Strm">The stream to write to</param>
     /// <param name="Value">The value to write</param>
+    [CLSCompliant(false)]
+    public static void WriteInt8(this Stream Strm, sbyte Value) => Strm.WriteByte((byte)Value);
+    /// <summary>
+    /// An alternative to <see cref="Stream.WriteByte(byte)"/>
+    /// </summary>
+    /// <param name="Strm">The stream to write to</param>
+    /// <param name="Value">The value to write</param>
     public static void WriteUInt8(this Stream Strm, byte Value) => Strm.WriteByte(Value);
     /// <summary>
     /// Writes an Int16 to the stream. Respects Endian.
@@ -793,6 +807,24 @@ public static class StreamUtil
         return v;
     }
 
+    /// <summary>
+    /// Creates a slice of a MemoryStream. This does make a copy of the data.
+    /// </summary>
+    /// <param name="Strm">The stream to slice from</param>
+    /// <param name="StartPosition">The starting point to slice</param>
+    /// <param name="Length">The length of the slice</param>
+    /// <returns>a MemoryStream containing the data in the slice</returns>
+    public static MemoryStream CreateStreamSlice(this Stream Strm, long StartPosition, long Length)
+    {
+        long PausePosition = Strm.Position;
+        byte[] data = new byte[Length];
+        Strm.Position = StartPosition;
+        Strm.Read(data);
+        Strm.Position = PausePosition;
+
+        return new MemoryStream(data);
+    }
+
     //====================================================================================================
 
     /// <summary>
@@ -824,7 +856,13 @@ public static class StreamUtil
         Strm.WriteString(UsedPadding, Encoding.ASCII, null);
     }
 
-    private static int CalculatePaddingLength(long StrmPos, int Multiple)
+    /// <summary>
+    /// Calculates how much padding is actually needed
+    /// </summary>
+    /// <param name="StrmPos">The number to calculate padding from</param>
+    /// <param name="Multiple">The number to calculate padding to</param>
+    /// <returns>The number to calculated padding</returns>
+    public static int CalculatePaddingLength(long StrmPos, int Multiple)
     {
         int result = (int)StrmPos % Multiple;
         if (result == 0)

@@ -49,7 +49,7 @@ public static partial class Utility
         long start = Strm.Position;
 
         Strm.WriteInt16((short)Values.Count);
-        Strm.Write(new byte[2] { 0xFF, 0xFF }, 0, 2);
+        Strm.Write([0xFF, 0xFF], 0, 2);
 
         foreach (string st in Values)
         {
@@ -213,7 +213,7 @@ public static partial class Utility
     {
         if (Track.Count == 0)
             throw new InvalidOperationException("Zero length tracks not allowed!");
-        List<float> Data = new();
+        List<float> Data = [];
 
         if (Track.Count == 1)
         {
@@ -235,7 +235,7 @@ public static partial class Utility
     {
         if (Track.Count == 0)
             throw new InvalidOperationException("Zero length tracks not allowed!");
-        List<short> Data = new();
+        List<short> Data = [];
 
         if (Track.Count == 1)
         {
@@ -289,7 +289,7 @@ public static partial class Utility
         ushort? NextFrameId = GetNextKeyframeIndex(Track, Time);
 
         if (NextFrameId is null)
-            return Track[Track.Count - 1].Value;
+            return Track[^1].Value;
         if (NextFrameId == 0)
             return Track[0].Value;
 
@@ -332,30 +332,30 @@ public static partial class Utility
     {
         throw new NotImplementedException();
 
-        J3DAnimationTrack NewTrack = new() { Tangent = Track.Tangent };
-        if (Track.Count == 1)
-        {
-            NewTrack.Add(new(0, Track[0].Value, Track[0].IngoingTangent, Track[0].OutgoingTangent));
-            return NewTrack;
-        }
+        //J3DAnimationTrack NewTrack = new() { Tangent = Track.Tangent };
+        //if (Track.Count == 1)
+        //{
+        //    NewTrack.Add(new(0, Track[0].Value, Track[0].IngoingTangent, Track[0].OutgoingTangent));
+        //    return NewTrack;
+        //}
 
-        ushort? FirstKeyframeId = GetNextKeyframeIndex(Track, (ushort)(StartTime-1));
-        ushort? SecondKeyframeId = GetNextKeyframeIndex(Track, (ushort)((StartTime+Duration)-1));
+        //ushort? FirstKeyframeId = GetNextKeyframeIndex(Track, (ushort)(StartTime-1));
+        //ushort? SecondKeyframeId = GetNextKeyframeIndex(Track, (ushort)((StartTime+Duration)-1));
 
-        if (FirstKeyframeId is null || SecondKeyframeId is null)
-        {
-            //What do we dooooo????
-            throw new Exception();
-        }
+        //if (FirstKeyframeId is null || SecondKeyframeId is null)
+        //{
+        //    //What do we dooooo????
+        //    throw new Exception();
+        //}
 
-        for (int i = 0; i <= SecondKeyframeId - FirstKeyframeId; i++)
-        {
-            int idx = FirstKeyframeId.Value + i;
-            NewTrack.Add(new((ushort)(Track[idx].Time - StartTime), Track[idx].Value, Track[idx].IngoingTangent, Track[idx].OutgoingTangent));
-        }
+        //for (int i = 0; i <= SecondKeyframeId - FirstKeyframeId; i++)
+        //{
+        //    int idx = FirstKeyframeId.Value + i;
+        //    NewTrack.Add(new((ushort)(Track[idx].Time - StartTime), Track[idx].Value, Track[idx].IngoingTangent, Track[idx].OutgoingTangent));
+        //}
 
 
-        return NewTrack;
+        //return NewTrack;
     }
 
 
@@ -369,13 +369,13 @@ public static partial class Utility
 
     private static float GetPointHermite(float p0, float p1, float s0, float s1, float Time)
     {
-        float[] Vector = new float[4]
-        {
+        float[] Vector =
+        [
             (p0 *  2) + (p1 * -2) + (s0 *  1) +  (s1 *  1),
             (p0 * -3) + (p1 *  3) + (s0 * -2) +  (s1 * -1),
             (p0 *  0) + (p1 *  0) + (s0 *  1) +  (s1 *  0),
             (p0 *  1) + (p1 *  0) + (s0 *  0) +  (s1 *  0)
-        };
+        ];
         return GetPointCubic(Vector, Time);
     }
 

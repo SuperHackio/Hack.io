@@ -152,7 +152,7 @@ public class BRK : J3DAnimationBase<Animation>, ILoadSaveFile
         long Start = Strm.Position;
         Strm.WriteString(MAGIC, Encoding.ASCII, null);
         Strm.WritePlaceholder(4); //FileSize
-        Strm.Write(new byte[4] { 0x00, 0x00, 0x00, 0x01 }, 0, 4); //Chunk Count
+        Strm.Write([0x00, 0x00, 0x00, 0x01], 0, 4); //Chunk Count
         Strm.WriteJ3DSubVersion();
 
         long ChunkStart = Strm.Position;
@@ -169,18 +169,18 @@ public class BRK : J3DAnimationBase<Animation>, ILoadSaveFile
 
         ushort CurrentRegisterRemap = 0;
         ushort CurrentConstantRemap = 0;
-        List<string> RegisterNames = new();
-        List<string> ConstantNames = new();
-        List<ushort> RegisterRemapTable = new();
-        List<ushort> ConstantRemapTable = new();
-        List<short> RegisterRedTable = new();
-        List<short> RegisterGreenTable = new();
-        List<short> RegisterBlueTable = new();
-        List<short> RegisterAlphaTable = new();
-        List<short> ConstantRedTable = new();
-        List<short> ConstantGreenTable = new();
-        List<short> ConstantBlueTable = new();
-        List<short> ConstantAlphaTable = new();
+        List<string> RegisterNames = [];
+        List<string> ConstantNames = [];
+        List<ushort> RegisterRemapTable = [];
+        List<ushort> ConstantRemapTable = [];
+        List<short> RegisterRedTable = [];
+        List<short> RegisterGreenTable = [];
+        List<short> RegisterBlueTable = [];
+        List<short> RegisterAlphaTable = [];
+        List<short> ConstantRedTable = [];
+        List<short> ConstantGreenTable = [];
+        List<short> ConstantBlueTable = [];
+        List<short> ConstantAlphaTable = [];
 
         long RegisterTableOffset = Strm.Position;
         foreach (Animation current in Registers)
@@ -322,10 +322,10 @@ public class BRK : J3DAnimationBase<Animation>, ILoadSaveFile
             }
         }
 
-        public J3DAnimationTrack Red { get; set; } = new();
-        public J3DAnimationTrack Green { get; set; } = new();
-        public J3DAnimationTrack Blue { get; set; } = new();
-        public J3DAnimationTrack Alpha { get; set; } = new();
+        public J3DAnimationTrack Red { get; set; } = [];
+        public J3DAnimationTrack Green { get; set; } = [];
+        public J3DAnimationTrack Blue { get; set; } = [];
+        public J3DAnimationTrack Alpha { get; set; } = [];
 
         public override string ToString() => $"{MaterialName} - {RegisterType}: {RegisterTarget}";
 
