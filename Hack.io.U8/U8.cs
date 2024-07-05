@@ -10,7 +10,7 @@ namespace Hack.io.U8;
 public class U8 : Archive
 {
     /// <inheritdoc cref="Interface.DocGen.DOC_MAGIC"/>
-    public const string MAGIC = "Uª8-";
+    public byte[] MAGIC => [0x55, 0xAA, 0x38, 0x2D];
 
     /// <summary>
     /// Create an empty U8 archive
@@ -174,7 +174,7 @@ public class U8 : Archive
         }
 
         //Write the Header
-        Strm.WriteString(MAGIC, StreamUtil.ShiftJIS, null);
+        Strm.WriteEndian(MAGIC);
         Strm.WriteInt32(0x20);
         Strm.WriteInt32(Nodes.Count * 0x0C + StringBytes.Count);
         Strm.WriteUInt32(DataOffset);
