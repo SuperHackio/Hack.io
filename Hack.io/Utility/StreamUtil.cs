@@ -1,4 +1,6 @@
-﻿using System.Diagnostics;
+﻿using System;
+using System.Diagnostics;
+using System.IO;
 using System.Text;
 [assembly: CLSCompliant(true)]
 
@@ -406,6 +408,26 @@ public static class StreamUtil
     }
 
     /// <summary>
+    /// Reads a value that has varying length. Maxes out at 28 bits read.
+    /// </summary>
+    /// <param name="Strm"></param>
+    /// <returns></returns>
+    public static int? ReadVariableLength(this Stream Strm)
+    {
+        int vlq = 0;
+        byte temp;
+        int counter = 0;
+        do
+        {
+            temp = Strm.ReadUInt8();
+            vlq = (vlq << 7) | (temp & 0x7F);
+            if (++counter >= 4)
+                return null;
+        } while ((temp & 0x80) > 0);
+        return vlq;
+    }
+
+    /// <summary>
     /// Reads a string from the Stream that's NULL terminated.<para/>This method is faster for single byte encodings
     /// </summary>
     /// <param name="Strm">The stream to read from</param>
@@ -717,6 +739,33 @@ public static class StreamUtil
     /// <param name="Strm">The stream to write to</param>
     /// <param name="Values">The Double values to write</param>
     public static void WriteMultiDouble(this Stream Strm, IList<double> Values) => Strm.WriteMulti(Values, WriteDouble);
+
+    /// <summary>
+    /// Writes a value that has varying length.
+    /// </summary>
+    /// <param name="Strm"></param>
+    /// <param name="value"></param>
+    public static void WriteVariableLength(this Stream Strm, int value)
+    {
+        int vbck = value;
+        int buffer;
+        byte last;
+        buffer = value & 0x7F;
+        while ((value >>= 7) > 0)
+        {
+            buffer <<= 8;
+            buffer |= 0x80;
+            buffer += (value & 0x7F);
+        }
+        do
+        {
+            last = unchecked((byte)buffer);
+            Strm.WriteByte(last);
+            buffer >>= 8;
+        } while (unchecked((byte)(buffer & 0x80)) > 0);
+        if ((last & 0x80) > 0)
+            Strm.WriteByte(unchecked((byte)buffer));
+    }
 
     /// <summary>
     /// Writes a string to the Stream that can be NULL terminated.<para/>This method is faster for single byte encodings

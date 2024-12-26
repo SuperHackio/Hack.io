@@ -215,4 +215,18 @@ public static class CollectionUtil
                 return false;
         return true;
     }
+
+    /// <summary>
+    /// Determines the index of a specific item in the collection using ReferenceEquals
+    /// </summary>
+    /// <param name="Source">The collection to look inparam>
+    /// <param name="Item">The object to locate in the collection</param>
+    /// <returns>The Index of the item, or -1 if it's not found.</returns>
+    public static int IndexOfReference<T>(this IList<T> Source, T Item)
+    {
+        for (int i = 0; i < Source.Count; i++)
+            if (ReferenceEquals(Source[i], Item))
+                return i;
+        return -1;
+    }
 }
