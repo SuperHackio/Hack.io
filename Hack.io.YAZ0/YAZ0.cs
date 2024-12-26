@@ -164,6 +164,9 @@ public static class YAZ0
 
         while (r.SrcPos < src.Length)
         {
+            if (BGW?.CancellationPending ?? false)
+                return [];
+
             uint numBytes;
             uint matchPos = 0;
             uint srcPosBak;
@@ -266,6 +269,9 @@ public static class YAZ0
         int Offs = 0;
         while (true)
         {
+            if (BGW?.CancellationPending ?? false)
+                return [];
+
             int headeroffs = dstoffs++;
             resultptr++;
             byte header = 0;

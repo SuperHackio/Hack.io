@@ -136,6 +136,9 @@ public static class YAY0
 
         for (int i = 0; i < file.Length; i++)
         {
+            if (BGW?.CancellationPending ?? false)
+                return [];
+
             if (dictionary.Contains(file[i]))
             {
                 //check for best match
