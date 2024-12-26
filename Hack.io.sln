@@ -37,6 +37,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Hack.io.MSBT", "Hack.io.MSB
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Hack.io.MSBF", "Hack.io.MSBF\Hack.io.MSBF.csproj", "{11EC5F55-C192-43C4-8792-76E5C99C5221}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Hack.io.CIT", "Hack.io.CIT\Hack.io.CIT.csproj", "{5DBCA2CD-8A0B-456F-8C2A-3D73C0340006}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
