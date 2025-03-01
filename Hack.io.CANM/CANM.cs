@@ -133,10 +133,16 @@ public class CANM : ILoadSaveFile
                     continue;
                 }
 
-                cur.FrameId = Strm.ReadSingle();
-                cur.Value = Strm.ReadSingle();
-                if (!IsCanm)
+
+                if (IsCanm)
                 {
+                    cur.FrameId = i;
+                    cur.Value = Strm.ReadSingle();
+                }
+                else
+                {
+                    cur.FrameId = Strm.ReadSingle();
+                    cur.Value = Strm.ReadSingle();
                     cur.InSlope = Strm.ReadSingle();
                     if (!UseSingleSlope)
                         cur.OutSlope = Strm.ReadSingle();
@@ -159,10 +165,14 @@ public class CANM : ILoadSaveFile
                     MyData.Add(cur.Value);
                     continue;
                 }
-                MyData.Add(cur.FrameId);
-                MyData.Add(cur.Value);
-                if (!IsCanm)
+                if (IsCanm)
                 {
+                    MyData.Add(cur.Value);
+                }
+                else
+                {
+                    MyData.Add(cur.FrameId);
+                    MyData.Add(cur.Value);
                     MyData.Add(cur.InSlope);
                     if (!UseSingleSlope)
                         MyData.Add(cur.OutSlope);
