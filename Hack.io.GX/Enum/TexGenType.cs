@@ -1,0 +1,16 @@
+﻿namespace Hack.io.GX;
+
+public enum GXTexGenType : byte
+{
+    TEXGENTYPE_MTX3x4 = 0,
+    TEXGENTYPE_MTX2x4 = 1,
+    TEXGENTYPE_BUMP0 = 2,
+    TEXGENTYPE_BUMP1 = 3,
+    TEXGENTYPE_BUMP2 = 4,
+    TEXGENTYPE_BUMP3 = 5,
+    TEXGENTYPE_BUMP4 = 6,
+    TEXGENTYPE_BUMP5 = 7,
+    TEXGENTYPE_BUMP6 = 8,
+    TEXGENTYPE_BUMP7 = 9,
+    TEXGENTYPE_SRTG = 10
+};

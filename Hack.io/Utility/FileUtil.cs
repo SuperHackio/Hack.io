@@ -50,36 +50,41 @@ public static class FileUtil
     /// </summary>
     /// <param name="FilePath">The system path to read from</param>
     /// <param name="Action">The method used to read the file</param>
-    public static void LoadFile(string FilePath, Action<Stream> Action) => RunForFileStream(FilePath, FileMode.Open, Action);
+    /// <param name="Access">The type of access to create for this file</param>
+    public static void LoadFile(string FilePath, Action<Stream> Action, FileAccess Access = FileAccess.ReadWrite) => RunForFileStream(FilePath, FileMode.Open, Access, Action);
     /// <summary>
     /// Loads a file to the disk.<para/>This exists so I don't have to keep writing FileStream Ctors
     /// </summary>
     /// <param name="FilePath">The system path to read from</param>
     /// <param name="Function">The method used to read the file</param>
-    public static TResult LoadFile<TResult>(string FilePath, Func<Stream, TResult> Function) => RunForFileStream(FilePath, FileMode.Open, Function);
+    /// <param name="Access">The type of access to create for this file</param>
+    public static TResult LoadFile<TResult>(string FilePath, Func<Stream, TResult> Function, FileAccess Access = FileAccess.ReadWrite) => RunForFileStream(FilePath, FileMode.Open, Access, Function);
 
     /// <summary>
     /// Saves a file to the disk.<para/>This exists so I don't have to keep writing FileStream save functions.
     /// </summary>
     /// <param name="FilePath">The system path to write to</param>
     /// <param name="Action">The method used to save the file</param>
-    public static void SaveFile(string FilePath, Action<Stream> Action) => RunForFileStream(FilePath, FileMode.Create, Action);
+    /// <param name="Access">The type of access to create for this file</param>
+    public static void SaveFile(string FilePath, Action<Stream> Action, FileAccess Access = FileAccess.ReadWrite) => RunForFileStream(FilePath, FileMode.Create, Access, Action);
     /// <summary>
     /// Saves a file to the disk.<para/>This exists so I don't have to keep writing FileStream save functions.
     /// </summary>
     /// <param name="FilePath">The system path to write to</param>
     /// <param name="Function">The method used to save the file</param>
-    public static TResult SaveFile<TResult>(string FilePath, Func<Stream, TResult> Function) => RunForFileStream(FilePath, FileMode.Create, Function);
+    /// <param name="Access">The type of access to create for this file</param>
+    public static TResult SaveFile<TResult>(string FilePath, Func<Stream, TResult> Function, FileAccess Access = FileAccess.ReadWrite) => RunForFileStream(FilePath, FileMode.Create, Access, Function);
 
     /// <summary>
     /// Executes a function using a FileStream from FilePath
     /// </summary>
     /// <param name="FilePath">The system path to write to</param>
     /// <param name="Mode">The mode to access the file in</param>
+    /// <param name="Access">The type of access to create for this file</param>
     /// <param name="Action">The method used on the FileStream</param>
-    public static void RunForFileStream(string FilePath, FileMode Mode, Action<Stream> Action)
+    public static void RunForFileStream(string FilePath, FileMode Mode, FileAccess Access, Action<Stream> Action)
     {
-        using FileStream fs = new(FilePath, Mode);
+        using FileStream fs = new(FilePath, Mode, Access);
         Action(fs);
         fs.Close();
     }
@@ -88,10 +93,11 @@ public static class FileUtil
     /// </summary>
     /// <param name="FilePath">The system path to write to</param>
     /// <param name="Mode">The mode to access the file in</param>
+    /// <param name="Access">The type of access to create for this file</param>
     /// <param name="Function">The method used on the FileStream</param>
-    public static TResult RunForFileStream<TResult>(string FilePath, FileMode Mode, Func<Stream, TResult> Function)
+    public static TResult RunForFileStream<TResult>(string FilePath, FileMode Mode, FileAccess Access, Func<Stream, TResult> Function)
     {
-        using FileStream fs = new(FilePath, Mode);
+        using FileStream fs = new(FilePath, Mode, Access);
         TResult result = Function(fs);
         fs.Close();
         return result;
@@ -176,5 +182,23 @@ public static class FileUtil
             }
         }
         return -1;
+    }
+    /// <summary>
+    /// Tries to get the decompressed bytes of a file from the disk using one of the provided decompressors.
+    /// </summary>
+    /// <param name="FilePath">The system path to read from</param>
+    /// <param name="DecompressOptions">An array of decoding options to attempt</param>
+    /// <returns>null if none of the decompressors work. Otherwise will return the decompressed bytes</returns>
+    public static byte[]? ReadWithDecompression(string FilePath, params (Func<Stream, bool> CheckFunc, Func<byte[], byte[]> DecodeFunction)[] DecompressOptions)
+    {
+        byte[] d = File.ReadAllBytes(FilePath);
+        MemoryStream fs = new(d,false);
+        for (int i = 0; i < DecompressOptions.Length; i++)
+        {
+            fs.Position = 0;
+            if (DecompressOptions[i].CheckFunc(fs))
+                return DecompressOptions[i].DecodeFunction(d);
+        }
+        return null;
     }
 }

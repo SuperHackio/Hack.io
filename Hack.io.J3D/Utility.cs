@@ -49,12 +49,12 @@ public static partial class Utility
         long start = Strm.Position;
 
         Strm.WriteInt16((short)Values.Count);
-        Strm.Write([0xFF, 0xFF], 0, 2);
+        Strm.Write([0xFF, 0xFF]);
 
         foreach (string st in Values)
         {
             Strm.WriteUInt16(HashString(st));
-            Strm.Write(new byte[2], 0, 2);
+            Strm.Write(new byte[2]);
         }
 
         long curOffset = Strm.Position;
@@ -68,6 +68,14 @@ public static partial class Utility
 
             curOffset = Strm.Position;
         }
+    }
+
+    public static uint CalculateJ3DStringTableSize(IList<string> Values)
+    {
+        int Size = 4 + (4 * Values.Count);
+        for (int i = 0; i < Values.Count; i++)
+            Size += StreamUtil.ShiftJIS.GetBytes(Values[i]).Length + 1; // Plus one for null terminator
+        return (uint)Size;
     }
 
     private static ushort HashString(string str)
@@ -391,7 +399,7 @@ public static partial class Utility
 sealed partial class DocGen
 {
     /// <summary>
-    /// The file chunk identifier
+    /// The chunk identifier
     /// </summary>
     public const string COMMON_CHUNKMAGIC = "";
     /// <summary>

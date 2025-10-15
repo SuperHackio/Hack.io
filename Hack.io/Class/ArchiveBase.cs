@@ -1,6 +1,5 @@
 ﻿using Hack.io.Interface;
 using Hack.io.Utility;
-using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -40,13 +39,15 @@ public abstract class Archive : ILoadSaveFile
         {
             if (Root is null || Path is null)
                 return null;
+            if (Path.Equals("/"))
+                return Root;
             if (Path.StartsWith(Root.Name + "/"))
                 Path = Path[(Root.Name.Length + 1)..];
             return Root[Path];
         }
         set
         {
-            if (!(value is ArchiveFile || value is ArchiveDirectory || value is null))
+            if (value is not (ArchiveFile or ArchiveDirectory or null))
                 throw new Exception($"Invalid object type of {value.GetType()}");
 
             if (Root is null)
@@ -104,7 +105,7 @@ public abstract class Archive : ILoadSaveFile
     {
         if (Root is null)
             return null;
-        if (Path.ToLower().StartsWith(Root.Name.ToLower() + "/"))
+        if (Path.StartsWith(Root.Name.ToLower() + "/", StringComparison.CurrentCultureIgnoreCase))
             Path = Path[(Root.Name.Length + 1)..];
         return Root.GetItemKeyFromNoCase(Path, true);
     }
@@ -157,7 +158,8 @@ public abstract class Archive : ILoadSaveFile
     public void Import(string Folderpath)
     {
         Root = NewDirectory(this, null);
-        Root.CreateFromFolder(Folderpath);
+        Type t = Root.GetType();
+        Root.CreateFromFolder(Folderpath, this);
     }
     /// <summary>
     /// Dump the contents of this archive to a folder
@@ -421,28 +423,31 @@ public class ArchiveDirectory
     /// </summary>
     /// <param name="FolderPath">The Disk folder path to import</param>
     /// <param name="OwnerArchive">The <paramref name="OwnerArchive"/> [Optional]</param>
-    public void CreateFromFolder(string FolderPath, Archive? OwnerArchive = null)
+    public void CreateFromFolder(string FolderPath, Archive? OwnerArchive)
     {
         if (Items.Count > 0)
             throw new Exception("Cannot create a directory from a folder if Items exist");
+        DirectoryInfo DI = new(FolderPath);
+        Name = DI.Name;
         string[] Found = Directory.GetFiles(FolderPath, "*.*", SearchOption.TopDirectoryOnly);
         for (int i = 0; i < Found.Length; i++)
         {
-            ArchiveFile temp = new()
-            {
-                Name = new FileInfo(Found[i]).Name
-            };
-            FileUtil.LoadFile(Found[i], temp.Load);
+            ArchiveFile temp = NewFile();
+            temp.Name = new FileInfo(Found[i]).Name;
+            FileUtil.LoadFile(Found[i], temp.Load, FileAccess.Read);
             Items[temp.Name] = temp;
+            temp.Parent = this;
         }
 
         string[] SubDirs = Directory.GetDirectories(FolderPath, "*.*", SearchOption.TopDirectoryOnly);
         for (int i = 0; i < SubDirs.Length; i++)
         {
             ArchiveDirectory temp = NewDirectory();
+            Type t = temp.GetType();
             temp.OwnerArchive = OwnerArchive;
-            temp.CreateFromFolder(SubDirs[i]);
+            temp.CreateFromFolder(SubDirs[i], OwnerArchive);
             Items[temp.Name] = temp;
+            temp.Parent = this;
         }
     }
     /// <summary>
@@ -661,6 +666,11 @@ public class ArchiveDirectory
     /// <param name="parent"></param>
     /// <returns></returns>
     protected virtual ArchiveDirectory NewDirectory(Archive? Owner, ArchiveDirectory parent) => new(Owner, parent);
+    /// <summary>
+    /// 
+    /// </summary>
+    /// <returns></returns>
+    protected virtual ArchiveFile NewFile() => new();
 
     //INTERNAL
     internal void GetFullPath(StringBuilder Path)

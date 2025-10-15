@@ -10,7 +10,7 @@ namespace Hack.io.U8;
 public class U8 : Archive
 {
     /// <inheritdoc cref="Interface.DocGen.DOC_MAGIC"/>
-    public byte[] MAGIC => [0x55, 0xAA, 0x38, 0x2D];
+    public static byte[] MAGIC => [0x55, 0xAA, 0x38, 0x2D];
 
     /// <summary>
     /// Create an empty U8 archive
@@ -48,11 +48,11 @@ public class U8 : Archive
         long StringTableLocation = OffsetToNodeSection + (TotalNodeCount * 0x0C);
 
         //Read all our entries
-        List<U8Node> entries = new()
-        {
+        List<U8Node> entries =
+        [
             RootNode
-        };
-        List<object> FlatItems = new();
+        ];
+        List<object> FlatItems = [];
         for (int i = 0; i < TotalNodeCount; i++)
         {
             var node = new U8Node(Strm);
@@ -113,21 +113,21 @@ public class U8 : Archive
         if (Root is null)
             throw new NullReferenceException(NULL_ROOT_EXCEPTION);
 
-        List<dynamic> FlatItems = new();
+        List<dynamic> FlatItems = [];
 
         AddItems(Root);
         //The archive has been flattened hooray
-        Dictionary<string, uint> StringOffsets = new();
+        Dictionary<string, uint> StringOffsets = [];
         List<byte> StringBytes = GetStringTableBytes(FlatItems, ref StringOffsets);
 
         uint DataOffset = (uint)(0x20 + (FlatItems.Count * 0x0C) + StringBytes.Count);
         DataOffset += 0x20 - (DataOffset % 0x20);
         //while (DataOffset % 16 != 0)
         //    DataOffset++;
-        Dictionary<ArchiveFile, uint> DataOffsets = new();
+        Dictionary<ArchiveFile, uint> DataOffsets = [];
         List<byte> DataBytes = GetDataBytes(FlatItems, DataOffset, ref DataOffsets);
 
-        List<U8Node> Nodes = new();
+        List<U8Node> Nodes = [];
         Stack<ArchiveDirectory> DirectoryStack = new();
         for (int i = 0; i < FlatItems.Count; i++)
         {
@@ -174,7 +174,7 @@ public class U8 : Archive
         }
 
         //Write the Header
-        Strm.WriteEndian(MAGIC);
+        Strm.Write(MAGIC);
         Strm.WriteInt32(0x20);
         Strm.WriteInt32(Nodes.Count * 0x0C + StringBytes.Count);
         Strm.WriteUInt32(DataOffset);
@@ -185,16 +185,16 @@ public class U8 : Archive
             Nodes[i].Write(Strm);
 
         //Write the strings
-        Strm.Write(StringBytes.ToArray(), 0, StringBytes.Count);
+        Strm.Write([.. StringBytes], 0, StringBytes.Count);
         Strm.PadTo(0x20, 0);
 
         //Write the File Data
-        Strm.Write(DataBytes.ToArray(), 0, DataBytes.Count);
+        Strm.Write([.. DataBytes], 0, DataBytes.Count);
 
         void AddItems(ArchiveDirectory dir)
         {
             FlatItems.Add(dir);
-            List<ArchiveDirectory> subdirs = new();
+            List<ArchiveDirectory> subdirs = [];
             foreach (var item in dir.Items)
             {
                 if (item.Value is ArchiveDirectory d)
@@ -243,7 +243,7 @@ public class U8 : Archive
 
     private static List<byte> GetDataBytes(List<dynamic> FlatFileList, uint DataStart, ref Dictionary<ArchiveFile, uint> Offsets)
     {
-        List<byte> FileBytes = new();
+        List<byte> FileBytes = [];
         for (int i = 0; i < FlatFileList.Count; i++)
         {
             if (FlatFileList[i] is not ArchiveFile file)
@@ -268,7 +268,7 @@ public class U8 : Archive
             }
             else
             {
-                List<byte> CurrentMRAMFile = file.FileData.ToList();
+                List<byte> CurrentMRAMFile = [.. file.FileData];
                 while (CurrentMRAMFile.Count % 32 != 0)
                     CurrentMRAMFile.Add(0x00);
                 Offsets.Add(file, (uint)FileBytes.Count + DataStart);
@@ -279,7 +279,7 @@ public class U8 : Archive
     }
     private static List<byte> GetStringTableBytes(List<dynamic> FlatFileList, ref Dictionary<string, uint> Offsets)
     {
-        List<byte> strings = new();
+        List<byte> strings = [];
         Encoding enc = Encoding.GetEncoding(932);
 
         for (int i = 0; i < FlatFileList.Count; i++)

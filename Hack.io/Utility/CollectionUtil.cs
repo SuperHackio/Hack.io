@@ -219,7 +219,7 @@ public static class CollectionUtil
     /// <summary>
     /// Determines the index of a specific item in the collection using ReferenceEquals
     /// </summary>
-    /// <param name="Source">The collection to look inparam>
+    /// <param name="Source">The collection to look in</param>
     /// <param name="Item">The object to locate in the collection</param>
     /// <returns>The Index of the item, or -1 if it's not found.</returns>
     public static int IndexOfReference<T>(this IList<T> Source, T Item)

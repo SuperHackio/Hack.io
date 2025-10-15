@@ -745,10 +745,9 @@ public static class StreamUtil
     /// </summary>
     /// <param name="Strm"></param>
     /// <param name="value"></param>
-    public static void WriteVariableLength(this Stream Strm, int value)
+    public static void WriteVariableLength(this Stream Strm, long value)
     {
-        int vbck = value;
-        int buffer;
+        long buffer;
         byte last;
         buffer = value & 0x7F;
         while ((value >>= 7) > 0)

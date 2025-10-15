@@ -1,0 +1,13 @@
+﻿namespace Hack.io.GX;
+
+public enum GXCompareType : byte
+{
+    ALPHACOMP_NEVER = 0,
+    ALPHACOMP_LESS = 1,
+    ALPHACOMP_EQUAL = 2,
+    ALPHACOMP_LESSEQUAL = 3,
+    ALPHACOMP_GREATER = 4,
+    ALPHACOMP_NOTEQUAL = 5,
+    ALPHACOMP_GREATEQUAL = 6,
+    ALPHACOMP_ALWAYS = 7,
+};

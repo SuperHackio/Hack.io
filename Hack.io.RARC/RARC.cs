@@ -528,7 +528,7 @@ public class RARC : Archive
         /// </summary>
         /// <param name="FolderPath"></param>
         /// <param name="OwnerArchive"></param>
-        public new void CreateFromFolder(string FolderPath, Archive? OwnerArchive = null)
+        public new void CreateFromFolder(string FolderPath, Archive? OwnerArchive)
         {
             if (OwnerArchive is not RARC r)
                 throw new Exception();
@@ -542,7 +542,7 @@ public class RARC : Archive
                 {
                     Name = new FileInfo(Found[i]).Name
                 };
-                FileUtil.LoadFile(Found[i], temp.Load);
+                FileUtil.LoadFile(Found[i], temp.Load, FileAccess.Read);
                 Items[temp.Name] = temp;
             }
 
@@ -551,7 +551,7 @@ public class RARC : Archive
             {
                 Directory temp = (Directory)NewDirectory();
                 temp.OwnerArchive = OwnerArchive;
-                temp.CreateFromFolder(SubDirs[i]);
+                temp.CreateFromFolder(SubDirs[i], OwnerArchive);
                 Items[temp.Name] = temp;
             }
         }
@@ -565,6 +565,8 @@ public class RARC : Archive
         protected override ArchiveDirectory NewDirectory() => new Directory();
         /// <inheritdoc/>
         protected override ArchiveDirectory NewDirectory(Archive? Owner, ArchiveDirectory? parent) => new Directory((RARC?)Owner, (Directory?)parent);
+        /// <inheritdoc/>
+        protected override ArchiveFile NewFile() => new File();
 
 
         public override bool Equals(object? obj)
