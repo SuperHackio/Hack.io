@@ -56,6 +56,20 @@ public static class StreamUtil
         if (!Invert)
             data.Reverse();
     }
+    /// <summary>
+    /// Applies the endian on a given value using bit math.
+    /// </summary>
+    /// <param name="value">Value to apply endian to</param>
+    /// <returns></returns>
+    public static long ApplyEndian(long value)
+    {
+        if (!UseBigEndian != BitConverter.IsLittleEndian)
+            return value;
+        return ((value & 0x000000FFU) << 24) |
+               ((value & 0x0000FF00U) << 8) |
+               ((value & 0x00FF0000U) >> 8) |
+               ((value & 0xFF000000U) >> 24);
+    }
 
     //====================================================================================================
 
@@ -530,33 +544,51 @@ public static class StreamUtil
     /// </summary>
     /// <param name="Strm">The stream to read</param>
     /// <param name="Magic">The magic to check</param>
+    /// <param name="BothEndians">Whether both endians of the magic should be checked for</param>
     /// <returns>TRUE if the next bytes match the magic, FALSE otherwise.</returns>
-    public static bool IsMagicMatch(this Stream Strm, ReadOnlySpan<byte> Magic)
+    public static bool IsMagicMatch(this Stream Strm, ReadOnlySpan<byte> Magic, bool BothEndians = false)
     {
         Debug.Assert(Magic.Length is > 0 and < 16);
 
         Span<byte> read = stackalloc byte[Magic.Length]; //Should be fine since MAGIC's are typically only 4 bytes long.
         Strm.ReadExactly(read);
         ApplyEndian(read, true);
-        return read.SequenceEqual(Magic);
+        bool isMatch = read.SequenceEqual(Magic);
+        if (isMatch)
+            return true;
+        if (BothEndians)
+        {
+            ApplyEndian(read, false);
+            isMatch = read.SequenceEqual(Magic);
+        }
+        return isMatch;
     }
-    /// <inheritdoc cref="IsMagicMatch(Stream, ReadOnlySpan{byte})"/>
-    public static bool IsMagicMatch(this Stream Strm, ReadOnlySpan<char> Magic) => IsMagicMatch(Strm, Magic, Encoding.ASCII);
+    /// <inheritdoc cref="IsMagicMatch(Stream, ReadOnlySpan{byte}, bool)"/>
+    public static bool IsMagicMatch(this Stream Strm, ReadOnlySpan<char> Magic, bool BothEndians = false) => IsMagicMatch(Strm, Magic, Encoding.ASCII);
     /// <summary>
     /// Checks the stream for a given Magic identifier.<para/>Advances the Stream's Position forwards by Magic.Length
     /// </summary>
     /// <param name="Strm">The stream to read</param>
     /// <param name="Magic">The magic to check</param>
     /// <param name="Enc">The encoding that should be used when reading the file</param>
+    /// <param name="BothEndians">Whether both endians of the magic should be checked for</param>
     /// <returns>TRUE if the next bytes match the magic, FALSE otherwise.</returns>
-    public static bool IsMagicMatch(this Stream Strm, ReadOnlySpan<char> Magic, Encoding Enc)
+    public static bool IsMagicMatch(this Stream Strm, ReadOnlySpan<char> Magic, Encoding Enc, bool BothEndians = false)
     {
         Debug.Assert(Magic.Length is > 0 and < 16);
 
         string str = Strm.ReadString(Magic.Length, Enc);
         Span<char> to = new(str.ToCharArray());
         ApplyEndian(to, true);
-        return to.SequenceEqual(Magic);
+        bool isMatch = to.SequenceEqual(Magic);
+        if (isMatch)
+            return true;
+        if (BothEndians)
+        {
+            ApplyEndian(to, false);
+            isMatch = to.SequenceEqual(Magic);
+        }
+        return isMatch;
     }
 
     //====================================================================================================
@@ -773,9 +805,12 @@ public static class StreamUtil
     /// <param name="String">The string to write</param>
     /// <param name="Enc">The encoding to write the string in</param>
     /// <param name="Terminator">The terminator byte. Set to NULL to dsiable termination (for MAGICs and whatnot)</param>
-    public static void WriteString(this Stream Strm, string String, Encoding Enc, byte? Terminator = 0x00)
+    /// <param name="ApplyEndian">Whether to reverse the string or not</param>
+    public static void WriteString(this Stream Strm, string String, Encoding Enc, byte? Terminator = 0x00, bool ApplyEndian = false)
     {
         byte[] Write = Enc.GetBytes(String);
+        if (ApplyEndian)
+            Array.Reverse(Write);
         Strm.Write(Write, 0, Write.Length);
         if (Terminator is not null)
             Strm.WriteByte(Terminator.Value);

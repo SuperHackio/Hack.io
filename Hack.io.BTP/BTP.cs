@@ -10,13 +10,13 @@ namespace Hack.io.BTP;
 public class BTP : J3DAnimationBase<Animation>, ILoadSaveFile
 {
     /// <inheritdoc cref="Interface.DocGen.DOC_MAGIC"/>
-    public const string MAGIC = "J3D1btp1";
+    public const uint MAGIC = 0x62747031;
     /// <inheritdoc cref="J3D.DocGen.COMMON_CHUNKMAGIC"/>
-    public const string CHUNKMAGIC = "TPT1";
+    public const uint CHUNKMAGIC = 0x54505431;
 
     public void Load(Stream Strm)
     {
-        FileUtil.ExceptionOnBadMagic(Strm, MAGIC);
+        FileUtil.ExceptionOnBadJ3DMagic(Strm, MAGIC);
         uint FileSize = Strm.ReadUInt32(),
             ChunkCount = Strm.ReadUInt32();
         Strm.Position += 0x10; //Strm.ReadJ3DSubVersion();
@@ -62,13 +62,14 @@ public class BTP : J3DAnimationBase<Animation>, ILoadSaveFile
     public void Save(Stream Strm)
     {
         long Start = Strm.Position;
-        Strm.WriteString(MAGIC, Encoding.ASCII, null);
+        Strm.WriteUInt32(0x4A334431); // J3D1
+        Strm.WriteUInt32(MAGIC);
         Strm.WritePlaceholder(4); //FileSize
-        Strm.Write(new byte[4] { 0x00, 0x00, 0x00, 0x01 }, 0, 4); //Chunk Count
+        Strm.WriteUInt32(1); // ChunkCount
         Strm.Write(CollectionUtil.InitilizeArray((byte)0xFF, 0x10));
 
         long ChunkStart = Strm.Position;
-        Strm.WriteString(CHUNKMAGIC, Encoding.ASCII, null);
+        Strm.WriteUInt32(CHUNKMAGIC);
         Strm.WritePlaceholder(4); //ChunkSize
         Strm.WriteByte((byte)Loop);
         Strm.WriteByte(0xFF);

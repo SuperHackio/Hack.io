@@ -10,7 +10,7 @@ namespace Hack.io.U8;
 public class U8 : Archive
 {
     /// <inheritdoc cref="Interface.DocGen.DOC_MAGIC"/>
-    public static byte[] MAGIC => [0x55, 0xAA, 0x38, 0x2D];
+    public const uint MAGIC = 0x55AA382D;
 
     /// <summary>
     /// Create an empty U8 archive
@@ -22,7 +22,7 @@ public class U8 : Archive
     /// <inheritdoc/>
     protected override void Read(Stream Strm)
     {
-        FileUtil.ExceptionOnBadMagic(Strm, MAGIC.AsSpan());
+        FileUtil.ExceptionOnBadMagic(Strm, MAGIC);
 
         uint OffsetToNodeSection = Strm.ReadUInt32(); //usually 0x20
         _ = Strm.ReadUInt32();
@@ -174,7 +174,7 @@ public class U8 : Archive
         }
 
         //Write the Header
-        Strm.Write(MAGIC);
+        Strm.WriteUInt32(MAGIC);
         Strm.WriteInt32(0x20);
         Strm.WriteInt32(Nodes.Count * 0x0C + StringBytes.Count);
         Strm.WriteUInt32(DataOffset);
