@@ -818,42 +818,6 @@ namespace Hack.io.KCL
                 Init();
             }
             private void Init() => CameraID = 0xFF;
-            // !!!
-            /*public static void ConvertBCSV(ref BCSV.BCSV x)
-            {
-                for (int i = 0; i < x.EntryCount; i++)
-                {
-                    if (x[i] is PaEntry)
-                        continue;
-
-                    BCSV.BCSV.Entry entry = x[i];
-                    PaEntry newentry = new PaEntry
-                    {
-                        Data = entry.Data
-                    };
-                    x[i] = newentry;
-                }
-            }
-
-            public static BCSV.BCSV CreateBCSV(WavefrontObj obj)
-            {
-                BCSV.BCSV bcsv = new BCSV.BCSV();
-
-                BCSV.BCSV.Field Cam = new BCSV.BCSV.Field(CAMERA_ID, BCSV.BCSV.DataTypes.INT32, CAMERA_ID_MASK, CAMERA_ID_SHIFT, false);
-                BCSV.BCSV.Field Sound = new BCSV.BCSV.Field(SOUND_CODE, BCSV.BCSV.DataTypes.INT32, SOUND_CODE_MASK, SOUND_CODE_SHIFT, false);
-                BCSV.BCSV.Field Floor = new BCSV.BCSV.Field(FLOOR_CODE, BCSV.BCSV.DataTypes.INT32, FLOOR_CODE_MASK, FLOOR_CODE_SHIFT, false);
-                BCSV.BCSV.Field Wall = new BCSV.BCSV.Field(WALL_CODE, BCSV.BCSV.DataTypes.INT32, WALL_CODE_MASK, WALL_CODE_SHIFT, false);
-                BCSV.BCSV.Field CamCol = new BCSV.BCSV.Field(CAMERA_THROUGH, BCSV.BCSV.DataTypes.INT32, CAMERA_THROUGH_MASK, CAMERA_THROUGH_SHIFT, false);
-
-                bcsv.Add(Cam, Sound, Floor, Wall, CamCol);
-
-                for (int i = 0; i < obj.GroupNames.Count; i++)
-                {
-                    bcsv.Add(new PaEntry());
-                }
-
-                return bcsv;
-            }*/
         }
     }
 
