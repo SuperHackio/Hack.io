@@ -20,14 +20,14 @@ public class BRK : J3DAnimationBase<Animation>, ILoadSaveFile
     /// <inheritdoc/>
     public void Load(Stream Strm)
     {
-        FileUtil.ExceptionOnBadMagic(Strm, MAGIC);
+        FileUtil.ExceptionOnBadMagic(Strm, MAGIC, true);
         uint FileSize = Strm.ReadUInt32(),
             ChunkCount = Strm.ReadUInt32();
         Strm.ReadJ3DSubVersion();
 
         //Only 1 chunk is supported
         uint ChunkStart = (uint)Strm.Position;
-        FileUtil.ExceptionOnBadMagic(Strm, CHUNKMAGIC);
+        FileUtil.ExceptionOnBadMagic(Strm, CHUNKMAGIC, true);
         uint ChunkSize = Strm.ReadUInt32();
         Loop = Strm.ReadEnum<LoopMode, byte>(StreamUtil.ReadUInt8);
         Strm.Position++; //Padding 0xFF
@@ -150,13 +150,14 @@ public class BRK : J3DAnimationBase<Animation>, ILoadSaveFile
         List<Animation> Constants = new(this.Where(x => x.RegisterType == AnimationType.CONSTANT));
 
         long Start = Strm.Position;
-        Strm.WriteString(MAGIC, Encoding.ASCII, null);
+        Strm.WriteUInt32(0x4A334431); // J3D1
+        Strm.WriteUInt32(0x62726B31); // brk1
         Strm.WritePlaceholder(4); //FileSize
-        Strm.Write([0x00, 0x00, 0x00, 0x01], 0, 4); //Chunk Count
+        Strm.WriteUInt32(1);
         Strm.WriteJ3DSubVersion();
 
         long ChunkStart = Strm.Position;
-        Strm.WriteString(CHUNKMAGIC, Encoding.ASCII, null);
+        Strm.WriteUInt32(0x54524B31); // TRK1
         Strm.WritePlaceholder(4); //ChunkSize
         Strm.WriteByte((byte)Loop);
         Strm.WriteByte(0xFF); //Padding
@@ -268,7 +269,7 @@ public class BRK : J3DAnimationBase<Animation>, ILoadSaveFile
         Strm.WriteUInt32((uint)(FileLength - Start));
 
         Strm.Position = ChunkStart + 0x04;
-        Strm.WriteUInt32((uint)(FileLength - (ChunkStart - Start)));
+        Strm.WriteUInt32((uint)StreamUtil.ApplyEndian(FileLength - (ChunkStart - Start)));
 
         Strm.Position = ChunkStart + 0x10;
         Strm.WriteUInt16((ushort)RegisterRedTable.Count);

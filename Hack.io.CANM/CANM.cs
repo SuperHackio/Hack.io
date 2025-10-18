@@ -79,10 +79,10 @@ public class CANM : ILoadSaveFile
         //long Start = Strm.Position;
         Strm.WriteString(MAGIC, Encoding.ASCII, null);
         Strm.WriteString(IsFullFrames ? FRAMETYPE_CANM : FRAMETYPE_CKAN, Encoding.ASCII, null);
-        Strm.WriteInt32(Unknown1);
-        Strm.WriteInt32(Unknown2);
-        Strm.WriteInt32(Unknown3);
-        Strm.WriteInt32(Unknown4);
+        Strm.WriteInt32((int)StreamUtil.ApplyEndian(Unknown1));
+        Strm.WriteInt32((int)StreamUtil.ApplyEndian(Unknown2));
+        Strm.WriteInt32((int)StreamUtil.ApplyEndian(Unknown3));
+        Strm.WriteInt32((int)StreamUtil.ApplyEndian(Unknown4));
         Strm.WriteInt32(Length);
         Strm.WriteInt32(IsFullFrames ? 0x40 : 0x60);
 

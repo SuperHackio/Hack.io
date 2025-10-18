@@ -142,18 +142,35 @@ public static class FileUtil
     }
 
     /// <summary>
-    /// throws an exception if the current Endian mode of Hack.io does not match the one present in the stream's BOM
+    /// throws an exception if the current stream position does not contain the requested magic
     /// </summary>
-    /// <param name="Strm"></param>
-    public static void ExceptionOnMisMatchedBOM(Stream Strm)
+    /// <param name="Strm">The stream to check</param>
+    /// <param name="Magic">The magic to check for</param>
+    /// <param name="BothEndians">Whether to check for both endians</param>
+    /// <exception cref="BadImageFormatException"></exception>
+    public static void ExceptionOnBadMagic(Stream Strm, ReadOnlySpan<byte> Magic, bool BothEndians = false)
     {
-        byte[] Raw = new byte[2];
-        Strm.Read(Raw);
-        ushort BOM = BitConverter.ToUInt16(Raw);
-        if (StreamUtil.GetCurrentEndian() && BOM != 0xFFFE)
-            throw new InvalidOperationException("File BOM does not match Hack.io's active Endian");
-        else if (!StreamUtil.GetCurrentEndian() && BOM != 0xFEFF)
-            throw new InvalidOperationException("File BOM does not match Hack.io's active Endian");
+        if (!Strm.IsMagicMatch(Magic, BothEndians))
+            throw new BadImageFormatException($"Invalid Magic. Expected \"{Magic.ToString()}\"");
+    }
+    /// <inheritdoc cref="ExceptionOnBadMagic(Stream, ReadOnlySpan{byte}, bool)" />
+    public static void ExceptionOnBadMagic(Stream Strm, ReadOnlySpan<char> Magic, bool BothEndians = false)
+    {
+        if (!Strm.IsMagicMatch(Magic, BothEndians))
+            throw new BadImageFormatException($"Invalid Magic. Expected \"{Magic.ToString()}\"");
+    }
+    /// <summary>
+    /// throws an exception if the current stream position does not contain the requested magic
+    /// </summary>
+    /// <param name="Strm">The stream to check</param>
+    /// <param name="Magic">The magic to check for</param>
+    /// <param name="Enc">The encoding to read the stream with</param>
+    /// <param name="AlternativeMagic">The alternative magic to check for</param>
+    /// <exception cref="BadImageFormatException"></exception>
+    public static void ExceptionOnBadMagic(Stream Strm, ReadOnlySpan<char> Magic, Encoding Enc, ReadOnlySpan<char> AlternativeMagic)
+    {
+        if (!Strm.IsMagicMatch(Magic, Enc) && !Strm.IsMagicMatch(AlternativeMagic, Enc))
+            throw new BadImageFormatException($"Invalid Magic. Expected \"{Magic}\" or \"{AlternativeMagic}\"");
     }
 
     /// <summary>

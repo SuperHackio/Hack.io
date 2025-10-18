@@ -28,7 +28,7 @@ public class BCK : J3DAnimationBase<Animation>, ILoadSaveFile
     public void Load(Stream Strm)
     {
         uint StartPosition = (uint)Strm.Position;
-        FileUtil.ExceptionOnBadMagic(Strm, MAGIC);
+        FileUtil.ExceptionOnBadMagic(Strm, MAGIC, true);
         uint FileSize = Strm.ReadUInt32(),
             ChunkCount = Strm.ReadUInt32();
         Strm.Position += 0x0C; //Strm.ReadJ3DSubVersion(); //This is not used the same way the other formats are
@@ -36,7 +36,7 @@ public class BCK : J3DAnimationBase<Animation>, ILoadSaveFile
 
         //Only 1 chunk is supported
         uint ChunkStart = (uint)Strm.Position;
-        FileUtil.ExceptionOnBadMagic(Strm, CHUNKMAGIC);
+        FileUtil.ExceptionOnBadMagic(Strm, CHUNKMAGIC, true);
         uint ChunkSize = Strm.ReadUInt32();
         Loop = Strm.ReadEnum<LoopMode, byte>(StreamUtil.ReadUInt8);
         RotationMultiplier = (sbyte)Strm.ReadByte();
@@ -102,13 +102,14 @@ public class BCK : J3DAnimationBase<Animation>, ILoadSaveFile
         float rotationScale = (float)(POW) * (180.0f / 32768.0f);
 
         long Start = Strm.Position;
-        Strm.WriteString(MAGIC, Encoding.ASCII, null);
+        Strm.WriteUInt32(0x4A334431); // J3D1
+        Strm.WriteUInt32(0x62636B31); // bck1
         Strm.WritePlaceholder(4); //FileSize
-        Strm.Write(new byte[4] { 0x00, 0x00, 0x00, 0x01 }, 0, 4); //Chunk Count
+        Strm.WriteUInt32(1); // ChunkCount
         Strm.Write(CollectionUtil.InitilizeArray((byte)0xFF, 0x10));
 
         long ChunkStart = Strm.Position;
-        Strm.WriteString(CHUNKMAGIC, Encoding.ASCII, null);
+        Strm.WriteUInt32(0x414E4B31); // ANK1
         Strm.WritePlaceholder(4); //ChunkSize
         Strm.WriteByte((byte)Loop);
         Strm.WriteByte((byte)RotationMultiplier);

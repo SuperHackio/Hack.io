@@ -1,5 +1,6 @@
 ﻿using Hack.io.Interface;
 using Hack.io.Utility;
+using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.Diagnostics.CodeAnalysis;
@@ -15,6 +16,9 @@ public class MSBF : ILoadSaveFile
     public const string MAGIC_FLW2 = "FLW2";
     public const string MAGIC_FEN1 = "FEN1";
     public const string MAGIC_REF1 = "REF1";
+    public const string MAGIC_FLW2_LE = "2WLF";
+    public const string MAGIC_FEN1_LE = "1NEF";
+    public const string MAGIC_REF1_LE = "1FER";
 
     [DisallowNull]
     public List<EntryNode> Flows = [];
@@ -24,7 +28,19 @@ public class MSBF : ILoadSaveFile
     {
         long FileStart = Strm.Position;
         FileUtil.ExceptionOnBadMagic(Strm, MAGIC);
-        FileUtil.ExceptionOnMisMatchedBOM(Strm);
+        ushort BOM = Strm.ReadUInt16();
+        if (BOM == 0xFEFF)
+        {
+            StreamUtil.SetEndianBig();
+        }
+        else if (BOM == 0xFFFE)
+        {
+            StreamUtil.SetEndianLittle();
+        }
+        else
+        {
+            throw new InvalidOperationException($"Unknown File BOM {BOM:X2}");
+        }
         Strm.Position += 0x03;
         if (Strm.ReadUInt8() != 0x03)
             throw new NotImplementedException("MSBF versions other than 3 are currently not supported");
@@ -45,11 +61,11 @@ public class MSBF : ILoadSaveFile
             uint ChunkSize = Strm.ReadUInt32();
             Strm.Position += 0x08;
 
-            if (Header.Equals(MAGIC_FLW2))
+            if (Header.Equals(MAGIC_FLW2) || Header.Equals(MAGIC_FLW2_LE))
                 ReadFLW2();
-            if (Header.Equals(MAGIC_FEN1))
+            if (Header.Equals(MAGIC_FEN1) || Header.Equals(MAGIC_FEN1_LE))
                 ReadFEN1();
-            if (Header.Equals(MAGIC_REF1))
+            if (Header.Equals(MAGIC_REF1) || Header.Equals(MAGIC_REF1_LE))
                 ReadREF1();
 
             Strm.Position = ChunkStart + 0x10 + ChunkSize;
@@ -107,6 +123,8 @@ public class MSBF : ILoadSaveFile
             long ChunkStart = Strm.Position;
             ushort NodeCount = Strm.ReadUInt16();
             ushort IndexCount = Strm.ReadUInt16();
+            if (!StreamUtil.GetCurrentEndian()) 
+                IndexCount = BinaryPrimitives.ReverseEndianness(IndexCount);
             Strm.Position += 0x04;
 
             for (int i = 0; i < NodeCount; i++)
