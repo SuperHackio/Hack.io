@@ -10,12 +10,9 @@ public class MSBT : ILoadSaveFile
     public const int LABEL_MAX_LENGTH = 255;
     /// <inheritdoc cref="Interface.DocGen.DOC_MAGIC"/>
     public const string MAGIC = "MsgStdBn";
-    public const string MAGIC_LBL1 = "LBL1";
-    public const string MAGIC_ATR1 = "ATR1";
-    public const string MAGIC_TXT2 = "TXT2";
-    public const string MAGIC_LBL1_LE = "1LBL";
-    public const string MAGIC_ATR1_LE = "1RTA";
-    public const string MAGIC_TXT2_LE = "2TXT";
+    public const uint MAGIC_LBL1 = 0x4C424C31;
+    public const uint MAGIC_ATR1 = 0x41545231;
+    public const uint MAGIC_TXT2 = 0x54585432;
     
     private Encoding mEncoding = Encoding.UTF8;
     public Encoding TextEncoding
@@ -73,15 +70,15 @@ public class MSBT : ILoadSaveFile
         for (int i = 0; i < SectionCount; i++)
         {
             long ChunkStart = Strm.Position;
-            string Header = Strm.ReadString(4, Encoding.ASCII);
+            uint Header = Strm.ReadUInt32();
             uint ChunkSize = Strm.ReadUInt32();
             Strm.Position += 0x08;
 
-            if (Header.Equals(MAGIC_LBL1) || Header.Equals(MAGIC_LBL1_LE))
+            if (Header.Equals(MAGIC_LBL1))
                 ReadLBL1();
-            if (Header.Equals(MAGIC_ATR1) || Header.Equals(MAGIC_ATR1_LE))
+            if (Header.Equals(MAGIC_ATR1))
                 ReadATR1();
-            if (Header.Equals(MAGIC_TXT2) || Header.Equals(MAGIC_TXT2_LE))
+            if (Header.Equals(MAGIC_TXT2))
                 ReadTXT2();
 
             Strm.Position = ChunkStart + 0x10 + ChunkSize;
@@ -194,7 +191,7 @@ public class MSBT : ILoadSaveFile
 
     public void Save(Stream Strm)
     {
-        Strm.WriteString("MsgStdBn", Encoding.ASCII, null);
+        Strm.WriteString(MAGIC, Encoding.ASCII, null);
         Strm.WriteUInt16(0xFEFF);
         Strm.Position += 0x02;
         if (TextEncoding == Encoding.UTF8)
@@ -232,7 +229,7 @@ public class MSBT : ILoadSaveFile
 
         void WriteLBL1()
         {
-            Strm.WriteUInt32(0x4C424C31); // LBL1
+            Strm.WriteUInt32(MAGIC_LBL1);
             long SectionStart = Strm.Position;
             Strm.Position += 0xC;
             long ChunkStart = Strm.Position;
@@ -270,7 +267,7 @@ public class MSBT : ILoadSaveFile
 
         void WriteATR1()
         {
-            Strm.WriteUInt32(0x41545231); // ATR1
+            Strm.WriteUInt32(MAGIC_ATR1);
             long SectionStart = Strm.Position;
             Strm.Position += 0xC;
             long ChunkStart = Strm.Position;
@@ -325,7 +322,7 @@ public class MSBT : ILoadSaveFile
         
         void WriteTXT2()
         {
-            Strm.WriteUInt32(0x54585432); // TXT2
+            Strm.WriteUInt32(MAGIC_TXT2);
             long SectionStart = Strm.Position;
             Strm.Position += 0xC;
             long ChunkStart = Strm.Position;

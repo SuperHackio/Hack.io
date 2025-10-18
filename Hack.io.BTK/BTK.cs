@@ -13,9 +13,9 @@ namespace Hack.io.BTK;
 public class BTK : J3DAnimationBase<Animation>, ILoadSaveFile
 {
     /// <inheritdoc cref="Interface.DocGen.DOC_MAGIC"/>
-    public const string MAGIC = "J3D1btk1";
+    public const uint MAGIC = 0x62746B31;
     /// <inheritdoc cref="J3D.DocGen.COMMON_CHUNKMAGIC"/>
-    public const string CHUNKMAGIC = "TTK1";
+    public const uint CHUNKMAGIC = 0x54544B31;
 
     /// <summary>
     /// If true, uses Maya math instead of normal J3D Math
@@ -30,14 +30,14 @@ public class BTK : J3DAnimationBase<Animation>, ILoadSaveFile
     /// <inheritdoc/>
     public void Load(Stream Strm)
     {
-        FileUtil.ExceptionOnBadMagic(Strm, MAGIC, true);
+        FileUtil.ExceptionOnBadJ3DMagic(Strm, MAGIC);
         uint FileSize = Strm.ReadUInt32(),
             ChunkCount = Strm.ReadUInt32();
         Strm.ReadJ3DSubVersion();
 
         //Only 1 chunk is supported
         uint ChunkStart = (uint)Strm.Position;
-        FileUtil.ExceptionOnBadMagic(Strm, CHUNKMAGIC, true);
+        FileUtil.ExceptionOnBadMagic(Strm, CHUNKMAGIC);
         uint ChunkSize = Strm.ReadUInt32();
         Loop = Strm.ReadEnum<LoopMode, byte>(StreamUtil.ReadUInt8);
         RotationMultiplier = (sbyte)Strm.ReadByte();
@@ -108,13 +108,13 @@ public class BTK : J3DAnimationBase<Animation>, ILoadSaveFile
 
         long Start = Strm.Position;
         Strm.WriteUInt32(0x4A334431); // J3D1
-        Strm.WriteUInt32(0x62746B31); // btk1
+        Strm.WriteUInt32(MAGIC);
         Strm.WritePlaceholder(4); //FileSize
         Strm.WriteUInt32(1); // ChunkCount
         Strm.WriteJ3DSubVersion();
 
         long ChunkStart = Strm.Position;
-        Strm.WriteUInt32(0x54544B31); // TTK1
+        Strm.WriteUInt32(CHUNKMAGIC);
         Strm.WritePlaceholder(4); //ChunkSize
         Strm.WriteByte((byte)Loop);
         Strm.WriteByte((byte)RotationMultiplier);

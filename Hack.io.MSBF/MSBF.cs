@@ -13,12 +13,9 @@ public class MSBF : ILoadSaveFile
     public const int LABEL_MAX_LENGTH = 255;
     /// <inheritdoc cref="Interface.DocGen.DOC_MAGIC"/>
     public const string MAGIC = "MsgFlwBn";
-    public const string MAGIC_FLW2 = "FLW2";
-    public const string MAGIC_FEN1 = "FEN1";
-    public const string MAGIC_REF1 = "REF1";
-    public const string MAGIC_FLW2_LE = "2WLF";
-    public const string MAGIC_FEN1_LE = "1NEF";
-    public const string MAGIC_REF1_LE = "1FER";
+    public const uint MAGIC_FLW2 = 0x464C5732;
+    public const uint MAGIC_FEN1 = 0x46454E31;
+    public const uint MAGIC_REF1 = 0x52454631;
 
     [DisallowNull]
     public List<EntryNode> Flows = [];
@@ -57,15 +54,15 @@ public class MSBF : ILoadSaveFile
         for (int i = 0; i < SectionCount; i++)
         {
             long ChunkStart = Strm.Position;
-            string Header = Strm.ReadString(4, Encoding.ASCII);
+            uint Header = Strm.ReadUInt32();
             uint ChunkSize = Strm.ReadUInt32();
             Strm.Position += 0x08;
 
-            if (Header.Equals(MAGIC_FLW2) || Header.Equals(MAGIC_FLW2_LE))
+            if (Header.Equals(MAGIC_FLW2))
                 ReadFLW2();
-            if (Header.Equals(MAGIC_FEN1) || Header.Equals(MAGIC_FEN1_LE))
+            if (Header.Equals(MAGIC_FEN1))
                 ReadFEN1();
-            if (Header.Equals(MAGIC_REF1) || Header.Equals(MAGIC_REF1_LE))
+            if (Header.Equals(MAGIC_REF1))
                 ReadREF1();
 
             Strm.Position = ChunkStart + 0x10 + ChunkSize;
@@ -185,10 +182,6 @@ public class MSBF : ILoadSaveFile
         Strm.WriteUInt16(0xFEFF);
         Strm.Write(CollectionUtil.InitilizeArray<byte>(0, 3));
         Strm.WriteUInt8(3); //Version
-        Strm.WritePlaceholder(2); //Section Count
-        Strm.WriteUInt16(0);
-        Strm.WritePlaceholder(4); //Filesize
-        Strm.Write(CollectionUtil.InitilizeArray<byte>(0, 0x0A));
 
         WriteFLW2();
         WriteFEN1();
@@ -204,7 +197,7 @@ public class MSBF : ILoadSaveFile
             GetFlattenedNodes(ref TemporaryNodes);
 
             long ChunkStart = Strm.Position;
-            Strm.WriteString(MAGIC_FLW2, Encoding.ASCII, null);
+            Strm.WriteUInt32(MAGIC_FLW2);
             Strm.WritePlaceholder(4); //Size
             Strm.Write(CollectionUtil.InitilizeArray<byte>(0, 0x08));
             Strm.WriteUInt16((ushort)TemporaryNodes.Count);
@@ -275,7 +268,7 @@ public class MSBF : ILoadSaveFile
                 Buckets.Add([]);
 
             long ChunkStart = Strm.Position;
-            Strm.WriteString(MAGIC_FEN1, Encoding.ASCII, null);
+            Strm.WriteUInt32(MAGIC_FEN1);
             Strm.WritePlaceholder(4);
             Strm.Write(CollectionUtil.InitilizeArray<byte>(0, 0x08));
 

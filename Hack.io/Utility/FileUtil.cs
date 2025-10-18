@@ -117,60 +117,36 @@ public static class FileUtil
     /// <param name="Strm">The stream to check</param>
     /// <param name="Magic">The magic to check for</param>
     /// <exception cref="BadImageFormatException"></exception>
-    public static void ExceptionOnBadMagic(Stream Strm, ReadOnlySpan<byte> Magic)
+    public static void ExceptionOnBadMagic(Stream Strm, uint Magic)
     {
-        if (!Strm.IsMagicMatch(Magic))
-            throw new BadImageFormatException($"Invalid Magic. Expected \"{Magic.ToString()}\"");
-    }
-    /// <inheritdoc cref="ExceptionOnBadMagic(Stream, ReadOnlySpan{byte})" />
-    public static void ExceptionOnBadMagic(Stream Strm, ReadOnlySpan<char> Magic)
-    {
-        if (!Strm.IsMagicMatch(Magic))
-            throw new BadImageFormatException($"Invalid Magic. Expected \"{Magic}\"");
-    }
-    /// <summary>
-    /// throws an exception if the current stream position does not contain the requested magic
-    /// </summary>
-    /// <param name="Strm">The stream to check</param>
-    /// <param name="Magic">The magic to check for</param>
-    /// <param name="Enc">The encoding to read the stream with</param>
-    /// <exception cref="BadImageFormatException"></exception>
-    public static void ExceptionOnBadMagic(Stream Strm, ReadOnlySpan<char> Magic, Encoding Enc)
-    {
-        if (!Strm.IsMagicMatch(Magic, Enc))
-            throw new BadImageFormatException($"Invalid Magic. Expected \"{Magic}\"");
+        uint val = Strm.ReadUInt32();
+        if (val != Magic)
+            throw new BadImageFormatException(String.Format("Invalid Magic. Expected 0x{0:X}", Magic));
     }
 
+    /// <inheritdoc cref="ExceptionOnBadMagic(Stream, uint)" />
+    public static void ExceptionOnBadJ3DMagic(Stream Strm, uint Magic)
+    {
+        uint j3dVersion = Strm.ReadUInt32();
+        uint val = Strm.ReadUInt32();
+        
+        if (j3dVersion != 0x4A334431 // J3D1
+            || val != Magic)
+            throw new BadImageFormatException(String.Format("Invalid Magic. Expected 0x{0:X}{1:X}", 0x4A334431, Magic));
+    }
+    
     /// <summary>
-    /// throws an exception if the current stream position does not contain the requested magic
+    /// throws an exception if the current stream position does not contain the requested magic.
+    /// DOES NOT ACCOUNT FOR ENDIAN.
     /// </summary>
     /// <param name="Strm">The stream to check</param>
     /// <param name="Magic">The magic to check for</param>
-    /// <param name="BothEndians">Whether to check for both endians</param>
     /// <exception cref="BadImageFormatException"></exception>
-    public static void ExceptionOnBadMagic(Stream Strm, ReadOnlySpan<byte> Magic, bool BothEndians = false)
+    public static void ExceptionOnBadMagic(Stream Strm, string Magic)
     {
-        if (!Strm.IsMagicMatch(Magic, BothEndians))
-            throw new BadImageFormatException($"Invalid Magic. Expected \"{Magic.ToString()}\"");
-    }
-    /// <inheritdoc cref="ExceptionOnBadMagic(Stream, ReadOnlySpan{byte}, bool)" />
-    public static void ExceptionOnBadMagic(Stream Strm, ReadOnlySpan<char> Magic, bool BothEndians = false)
-    {
-        if (!Strm.IsMagicMatch(Magic, BothEndians))
-            throw new BadImageFormatException($"Invalid Magic. Expected \"{Magic.ToString()}\"");
-    }
-    /// <summary>
-    /// throws an exception if the current stream position does not contain the requested magic
-    /// </summary>
-    /// <param name="Strm">The stream to check</param>
-    /// <param name="Magic">The magic to check for</param>
-    /// <param name="Enc">The encoding to read the stream with</param>
-    /// <param name="AlternativeMagic">The alternative magic to check for</param>
-    /// <exception cref="BadImageFormatException"></exception>
-    public static void ExceptionOnBadMagic(Stream Strm, ReadOnlySpan<char> Magic, Encoding Enc, ReadOnlySpan<char> AlternativeMagic)
-    {
-        if (!Strm.IsMagicMatch(Magic, Enc) && !Strm.IsMagicMatch(AlternativeMagic, Enc))
-            throw new BadImageFormatException($"Invalid Magic. Expected \"{Magic}\" or \"{AlternativeMagic}\"");
+        string val = Strm.ReadString(Magic.Length, Encoding.ASCII);
+        if (val != Magic)
+            throw new BadImageFormatException(String.Format("Invalid Magic. Expected \"{0}\"", Magic));
     }
 
     /// <summary>

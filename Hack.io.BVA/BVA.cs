@@ -9,20 +9,20 @@ namespace Hack.io.BVA;
 public class BVA : J3DAnimationBase<Animation>, ILoadSaveFile
 {
     /// <inheritdoc cref="Interface.DocGen.DOC_MAGIC"/>
-    public const string MAGIC = "J3D1bva1";
+    public const uint MAGIC = 0x62766131;
     /// <inheritdoc cref="J3D.DocGen.COMMON_CHUNKMAGIC"/>
-    public const string CHUNKMAGIC = "VAF1";
+    public const uint CHUNKMAGIC = 0x56414631;
 
     public void Load(Stream Strm)
     {
-        FileUtil.ExceptionOnBadMagic(Strm, MAGIC, true);
+        FileUtil.ExceptionOnBadJ3DMagic(Strm, MAGIC);
         uint FileSize = Strm.ReadUInt32(),
             ChunkCount = Strm.ReadUInt32();
         Strm.Position += 0x10; //Strm.ReadJ3DSubVersion();
 
         //Only 1 chunk is supported
         uint ChunkStart = (uint)Strm.Position;
-        FileUtil.ExceptionOnBadMagic(Strm, CHUNKMAGIC, true);
+        FileUtil.ExceptionOnBadMagic(Strm, CHUNKMAGIC);
         uint ChunkSize = Strm.ReadUInt32();
         Loop = Strm.ReadEnum<LoopMode, byte>(StreamUtil.ReadUInt8);
         Strm.Position++; //Padding 0xFF
@@ -63,13 +63,13 @@ public class BVA : J3DAnimationBase<Animation>, ILoadSaveFile
     {
         long Start = Strm.Position;
         Strm.WriteUInt32(0x4A334431); // J3D1
-        Strm.WriteUInt32(0x62766131); // bva1
+        Strm.WriteUInt32(MAGIC);
         Strm.WritePlaceholder(4); //FileSize
         Strm.WriteUInt32(1); //ChunkCount
         Strm.Write(CollectionUtil.InitilizeArray((byte)0xFF, 0x10));
 
         long ChunkStart = Strm.Position;
-        Strm.WriteUInt32(0x56414631); // VAF1
+        Strm.WriteUInt32(CHUNKMAGIC);
         Strm.WritePlaceholder(4); //ChunkSize
         Strm.WriteByte((byte)Loop);
         Strm.WriteByte(0xFF);

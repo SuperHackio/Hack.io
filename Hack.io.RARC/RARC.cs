@@ -72,7 +72,6 @@ public class RARC : Archive
     protected override void Read(Stream Strm)
     {
         #region Header
-        FileUtil.ExceptionOnBadMagic(Strm, MAGIC, true);
         Strm.Position = 0;
         uint magic = Strm.ReadUInt32();
         if (magic == 0x43524152) // CRAR
@@ -84,6 +83,9 @@ public class RARC : Archive
         {
             StreamUtil.SetEndianBig();
             IsBigEndian = true;
+        } else
+        {
+            throw new BadImageFormatException($"Invalid Magic. Expected \"RARC\" or \"CRAR\"");
         }
 
         uint FileSize = Strm.ReadUInt32(),
