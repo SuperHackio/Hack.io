@@ -85,11 +85,18 @@ public static class MathUtil
     }
 
     /// <summary>
-    /// Returns the decimal part of a number
+    /// Returns the decimal part of a number<para/><strong><see cref="decimal"/> precision</strong>
     /// </summary>
     /// <param name="number"></param>
     /// <returns></returns>
     public static double GetDecimal(double number) => (int)((decimal)number % 1 * 100);
+
+    /// <summary>
+    /// Returns the decimal part of a number<para/><strong><see cref="float"/> precision</strong>
+    /// </summary>
+    /// <param name="number"></param>
+    /// <returns></returns>
+    public static float GetDecimal(float number) => (int)((float)number % 1 * 100);
 
     /// <summary>
     /// Returns the Rightmost bit that is set

@@ -158,7 +158,7 @@ public abstract class Archive : ILoadSaveFile
     public void Import(string Folderpath)
     {
         Root = NewDirectory(this, null);
-        Type t = Root.GetType();
+        //Type t = Root.GetType();
         Root.CreateFromFolder(Folderpath, this);
     }
     /// <summary>

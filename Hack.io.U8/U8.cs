@@ -113,6 +113,7 @@ public class U8 : Archive
         if (Root is null)
             throw new NullReferenceException(NULL_ROOT_EXCEPTION);
 
+        int FileCount = 0;
         List<dynamic> FlatItems = [];
 
         AddItems(Root);
@@ -121,9 +122,8 @@ public class U8 : Archive
         List<byte> StringBytes = GetStringTableBytes(FlatItems, ref StringOffsets);
 
         uint DataOffset = (uint)(0x20 + (FlatItems.Count * 0x0C) + StringBytes.Count);
-        DataOffset += 0x20 - (DataOffset % 0x20);
-        //while (DataOffset % 16 != 0)
-        //    DataOffset++;
+        DataOffset += (uint)StreamUtil.CalculatePaddingLength(DataOffset, 32);
+
         Dictionary<ArchiveFile, uint> DataOffsets = [];
         List<byte> DataBytes = GetDataBytes(FlatItems, DataOffset, ref DataOffsets);
 
@@ -155,8 +155,8 @@ public class U8 : Archive
             }
             else
             {
-                newnode.DataOffset = (int)DataOffsets[(ArchiveFile)FlatItems[i]];
-                newnode.Size = ((ArchiveFile)FlatItems[i]).FileData?.Length ?? throw new FileNotFoundException($"File \"{FlatItems[i].Name}\" has no data");
+                newnode.DataOffset = (int)DataOffsets[FlatItems[i]];
+                newnode.Size = (FlatItems[i]).FileData?.Length ?? throw new FileNotFoundException($"File \"{FlatItems[i].Name}\" has no data");
             }
             Nodes.Add(newnode);
             if (DirectoryStack.Peek().Items.Count == 0 || object.ReferenceEquals(FlatItems[i], DirectoryStack.Peek().Items.Last().Value))
@@ -200,7 +200,10 @@ public class U8 : Archive
                 if (item.Value is ArchiveDirectory d)
                     subdirs.Add(d);
                 else
+                {
+                    FileCount++;
                     FlatItems.Add(item.Value);
+                }
             }
             for (int i = 0; i < subdirs.Count; i++)
                 AddItems(subdirs[i]);
@@ -283,14 +286,12 @@ public class U8 : Archive
         Encoding enc = Encoding.GetEncoding(932);
 
         for (int i = 0; i < FlatFileList.Count; i++)
-        {
             if (!Offsets.ContainsKey(FlatFileList[i].Name))
             {
                 Offsets.Add(FlatFileList[i].Name, (uint)strings.Count);
                 strings.AddRange(enc.GetBytes(FlatFileList[i].Name));
                 strings.Add(0x00);
             }
-        }
         return strings;
     }
     #endregion

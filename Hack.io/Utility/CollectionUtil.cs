@@ -229,4 +229,16 @@ public static class CollectionUtil
                 return i;
         return -1;
     }
+
+    /// <summary>
+    /// Adds the <paramref name="Item"/> to <paramref name="Source"/> if it doesn't already <see cref="ICollection{T}.Contains(T)"/> it.
+    /// </summary>
+    /// <typeparam name="T"></typeparam>
+    /// <param name="Source"></param>
+    /// <param name="Item"></param>
+    public static void AddIfNotContains<T>(this IList<T> Source, T Item)
+    {
+        if (!Source.Contains(Item))
+            Source.Add(Item);
+    }
 }
