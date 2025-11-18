@@ -117,43 +117,36 @@ public static class FileUtil
     /// <param name="Strm">The stream to check</param>
     /// <param name="Magic">The magic to check for</param>
     /// <exception cref="BadImageFormatException"></exception>
-    public static void ExceptionOnBadMagic(Stream Strm, ReadOnlySpan<byte> Magic)
+    public static void ExceptionOnBadMagic(Stream Strm, uint Magic)
     {
-        if (!Strm.IsMagicMatch(Magic))
-            throw new BadImageFormatException($"Invalid Magic. Expected \"{Magic.ToString()}\"");
+        uint val = Strm.ReadUInt32();
+        if (val != Magic)
+            throw new BadImageFormatException(String.Format("Invalid Magic. Expected 0x{0:X}", Magic));
     }
-    /// <inheritdoc cref="ExceptionOnBadMagic(Stream, ReadOnlySpan{byte})" />
-    public static void ExceptionOnBadMagic(Stream Strm, ReadOnlySpan<char> Magic)
+
+    /// <inheritdoc cref="ExceptionOnBadMagic(Stream, uint)" />
+    public static void ExceptionOnBadJ3DMagic(Stream Strm, uint Magic)
     {
-        if (!Strm.IsMagicMatch(Magic))
-            throw new BadImageFormatException($"Invalid Magic. Expected \"{Magic}\"");
+        uint j3dVersion = Strm.ReadUInt32();
+        uint val = Strm.ReadUInt32();
+        
+        if (j3dVersion != 0x4A334431 // J3D1
+            || val != Magic)
+            throw new BadImageFormatException(String.Format("Invalid Magic. Expected 0x{0:X}{1:X}", 0x4A334431, Magic));
     }
+    
     /// <summary>
-    /// throws an exception if the current stream position does not contain the requested magic
+    /// throws an exception if the current stream position does not contain the requested magic.
+    /// DOES NOT ACCOUNT FOR ENDIAN.
     /// </summary>
     /// <param name="Strm">The stream to check</param>
     /// <param name="Magic">The magic to check for</param>
-    /// <param name="Enc">The encoding to read the stream with</param>
     /// <exception cref="BadImageFormatException"></exception>
-    public static void ExceptionOnBadMagic(Stream Strm, ReadOnlySpan<char> Magic, Encoding Enc)
+    public static void ExceptionOnBadMagic(Stream Strm, string Magic)
     {
-        if (!Strm.IsMagicMatch(Magic, Enc))
-            throw new BadImageFormatException($"Invalid Magic. Expected \"{Magic}\"");
-    }
-
-    /// <summary>
-    /// throws an exception if the current Endian mode of Hack.io does not match the one present in the stream's BOM
-    /// </summary>
-    /// <param name="Strm"></param>
-    public static void ExceptionOnMisMatchedBOM(Stream Strm)
-    {
-        byte[] Raw = new byte[2];
-        Strm.Read(Raw);
-        ushort BOM = BitConverter.ToUInt16(Raw);
-        if (StreamUtil.GetCurrentEndian() && BOM != 0xFFFE)
-            throw new InvalidOperationException("File BOM does not match Hack.io's active Endian");
-        else if (!StreamUtil.GetCurrentEndian() && BOM != 0xFEFF)
-            throw new InvalidOperationException("File BOM does not match Hack.io's active Endian");
+        string val = Strm.ReadString(Magic.Length, Encoding.ASCII);
+        if (val != Magic)
+            throw new BadImageFormatException(String.Format("Invalid Magic. Expected \"{0}\"", Magic));
     }
 
     /// <summary>

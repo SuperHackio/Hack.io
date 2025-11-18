@@ -17,6 +17,10 @@ public class RARC : Archive
 
     #region Properties
     /// <summary>
+    /// Specifies whether the RARC is in Big Endian (true) or Little Endian (false)
+    /// </summary>
+    public bool IsBigEndian { get; set; }
+    /// <summary>
     /// If false, the user must set all unique ID's for each file
     /// </summary>
     public bool KeepFileIDsSynced { get; set; } = true;
@@ -68,7 +72,21 @@ public class RARC : Archive
     protected override void Read(Stream Strm)
     {
         #region Header
-        FileUtil.ExceptionOnBadMagic(Strm, MAGIC);
+        Strm.Position = 0;
+        uint magic = Strm.ReadUInt32();
+        if (magic == 0x43524152) // CRAR
+        {
+            StreamUtil.SetEndianLittle();
+            IsBigEndian = false;
+        }
+        else if (magic == 0x52415243) // RARC
+        {
+            StreamUtil.SetEndianBig();
+            IsBigEndian = true;
+        } else
+        {
+            throw new BadImageFormatException($"Invalid Magic. Expected \"RARC\" or \"CRAR\"");
+        }
 
         uint FileSize = Strm.ReadUInt32(),
             DataHeaderOffset = Strm.ReadUInt32(),
@@ -104,13 +122,25 @@ public class RARC : Archive
         Strm.Seek(FileEntryTableOffset, SeekOrigin.Begin);
         for (int i = 0; i < FileEntryCount; i++)
         {
-            FlatFileList.Add(new RARCFileEntry()
+            ushort CurrentNameOffset;
+            if (IsBigEndian == true)
             {
-                FileID = Strm.ReadInt16(),
-                NameHash = Strm.ReadInt16(),
-                Type = Strm.ReadInt16()
-            });
-            ushort CurrentNameOffset = Strm.ReadUInt16();
+                RARCFileEntry fileEntry = new();
+                fileEntry.FileID = Strm.ReadInt16();
+                fileEntry.NameHash = Strm.ReadInt16();
+                fileEntry.Type = Strm.ReadInt16();
+                CurrentNameOffset = Strm.ReadUInt16();
+                FlatFileList.Add(fileEntry);
+            }
+            else
+            {
+                RARCFileEntry fileEntry = new();
+                fileEntry.FileID = Strm.ReadInt16();
+                fileEntry.NameHash = Strm.ReadInt16();
+                CurrentNameOffset = Strm.ReadUInt16();
+                fileEntry.Type = Strm.ReadInt16();
+                FlatFileList.Add(fileEntry);
+            }
             FlatFileList[^1].ModularA = Strm.ReadInt32();
             FlatFileList[^1].ModularB = Strm.ReadInt32();
             Strm.Position += 0x04;
@@ -175,24 +205,39 @@ public class RARC : Archive
         List<RARCFileEntry> FlatFileList = GetFlatFileList(Root, FileOffsets, ref FileID, 0, ref NextFolderID, -1);
         uint FirstFileOffset = 0;
         List<RARCDirEntry> FlatDirectoryList = GetFlatDirectoryList(Root, ref FirstFileOffset);
-        FlatDirectoryList.Insert(0, new RARCDirEntry() { FileCount = (ushort)(Root.Items.Count + 2), FirstFileOffset = 0, Name = Root.Name, NameHash = StringToHash(Root.Name), NameOffset = 0, Type = "ROOT" });
+
+        RARCDirEntry root = new RARCDirEntry();
+        root.FileCount = (ushort)(Root.Items.Count + 2);
+        root.FirstFileOffset = 0;
+        root.Name = Root.Name;
+        root.NameHash = StringToHash(Root.Name);
+        root.NameOffset = 0;
+        if (IsBigEndian == true) 
+            root.Type = "ROOT";
+        else 
+            root.Type = "TOOR";
+        FlatDirectoryList.Insert(0, root);
+
         Dictionary<string, uint> StringLocations = new();
         byte[] StringDataBuffer = GetStringTableBytes(FlatFileList, Root.Name, ref StringLocations).ToArray();
 
         #region File Writing
         long StartPosition = Strm.Position;
-        Strm.WriteString(MAGIC, Encoding.ASCII, null);
-        Strm.Write(new byte[16] { 0xDD, 0xDD, 0xDD, 0xDD, 0x00, 0x00, 0x00, 0x20, 0xDD, 0xDD, 0xDD, 0xDD, 0xEE, 0xEE, 0xEE, 0xEE }, 0, 16);
+        Strm.WriteUInt32(0x52415243); // RARC
+        Strm.WriteUInt32(0xDDDDDDDD); // Placeholder
+        Strm.WriteUInt32(0x20);
+        Strm.WriteUInt32(0xDDDDDDDD); // Placeholder
+        Strm.WriteUInt32(0xEEEEEEEE); // Placeholder
         Strm.WriteUInt32(MRAMSize);
         Strm.WriteUInt32(ARAMSize);
         Strm.WriteUInt32(DVDSize);
         //Data Header
         Strm.WriteInt32(FlatDirectoryList.Count);
-        Strm.Write(new byte[4] { 0xDD, 0xDD, 0xDD, 0xDD }, 0, 4); //Directory Nodes Location (-0x20)
+        Strm.WriteUInt32(0xDDDDDDDD); //Directory Nodes Location (-0x20)
         Strm.WriteInt32(FlatFileList.Count);
-        Strm.Write(new byte[4] { 0xDD, 0xDD, 0xDD, 0xDD }, 0, 4); //File Entries Location (-0x20)
-        Strm.Write(new byte[4] { 0xEE, 0xEE, 0xEE, 0xEE }, 0, 4); //String Table Size
-        Strm.Write(new byte[4] { 0xEE, 0xEE, 0xEE, 0xEE }, 0, 4); //string Table Location (-0x20)
+        Strm.WriteUInt32(0xDDDDDDDD); //File Entries Location (-0x20)
+        Strm.WriteUInt32(0xEEEEEEEE); //String Table Size
+        Strm.WriteUInt32(0xEEEEEEEE); //string Table Location (-0x20)
         Strm.WriteUInt16((ushort)FlatFileList.Count);
         Strm.WriteByte((byte)(KeepFileIDsSynced ? 0x01 : 0x00));
         Strm.Write(new byte[5], 0, 5);
@@ -217,11 +262,19 @@ public class RARC : Archive
         {
             Strm.WriteInt16(FlatFileList[i].FileID);
             Strm.WriteUInt16(StringToHash(FlatFileList[i].Name));
-            Strm.WriteInt16(FlatFileList[i].Type);
-            Strm.WriteUInt16((ushort)StringLocations[FlatFileList[i].Name]);
+            if (IsBigEndian == true)
+            {
+                Strm.WriteInt16(FlatFileList[i].Type);
+                Strm.WriteUInt16((ushort)StringLocations[FlatFileList[i].Name]);
+            }
+            else
+            {
+                Strm.WriteUInt16((ushort)StringLocations[FlatFileList[i].Name]);
+                Strm.WriteInt16(FlatFileList[i].Type);
+            }
             Strm.WriteInt32(FlatFileList[i].ModularA);
             Strm.WriteInt32(FlatFileList[i].ModularB);
-            Strm.Write(new byte[4], 0, 4);
+            Strm.WriteUInt32(0);
         }
         Strm.PadTo(32);
         #endregion
@@ -568,7 +621,11 @@ public class RARC : Archive
         /// <inheritdoc/>
         protected override ArchiveFile NewFile() => new File();
 
-
+        /// <summary>
+        /// Whether a given directory is equal to this one.
+        /// </summary>
+        /// <param name="obj">The other directory.</param>
+        /// <returns></returns>
         public override bool Equals(object? obj)
         {
             if (obj is not Directory OtherDir)
@@ -616,10 +673,15 @@ public class RARC : Archive
             FileData = new byte[entry.ModularB];
             RARCFile.Read(FileData);
         }
-        
+
         /// <inheritdoc/>
         public override string ToString() => $"{ID} - {Name} ({FileSettings}) [0x{FileData?.Length ?? 0:X8}]";
 
+        /// <summary>
+        /// Whether a given file is equal to this one.
+        /// </summary>
+        /// <param name="obj">The other directory.</param>
+        /// <returns></returns>
         public override bool Equals(object? obj)
         {
             return obj is File OtherFile &&

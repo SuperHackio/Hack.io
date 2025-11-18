@@ -1,5 +1,6 @@
 ﻿using Hack.io.Interface;
 using Hack.io.Utility;
+using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.Diagnostics.CodeAnalysis;
@@ -12,9 +13,9 @@ public class MSBF : ILoadSaveFile
     public const int LABEL_MAX_LENGTH = 255;
     /// <inheritdoc cref="Interface.DocGen.DOC_MAGIC"/>
     public const string MAGIC = "MsgFlwBn";
-    public const string MAGIC_FLW2 = "FLW2";
-    public const string MAGIC_FEN1 = "FEN1";
-    public const string MAGIC_REF1 = "REF1";
+    public const uint MAGIC_FLW2 = 0x464C5732;
+    public const uint MAGIC_FEN1 = 0x46454E31;
+    public const uint MAGIC_REF1 = 0x52454631;
 
     [DisallowNull]
     public List<EntryNode> Flows = [];
@@ -24,7 +25,19 @@ public class MSBF : ILoadSaveFile
     {
         long FileStart = Strm.Position;
         FileUtil.ExceptionOnBadMagic(Strm, MAGIC);
-        FileUtil.ExceptionOnMisMatchedBOM(Strm);
+        ushort BOM = Strm.ReadUInt16();
+        if (BOM == 0xFEFF)
+        {
+            StreamUtil.SetEndianBig();
+        }
+        else if (BOM == 0xFFFE)
+        {
+            StreamUtil.SetEndianLittle();
+        }
+        else
+        {
+            throw new InvalidOperationException($"Unknown File BOM {BOM:X2}");
+        }
         Strm.Position += 0x03;
         if (Strm.ReadUInt8() != 0x03)
             throw new NotImplementedException("MSBF versions other than 3 are currently not supported");
@@ -41,7 +54,7 @@ public class MSBF : ILoadSaveFile
         for (int i = 0; i < SectionCount; i++)
         {
             long ChunkStart = Strm.Position;
-            string Header = Strm.ReadString(4, Encoding.ASCII);
+            uint Header = Strm.ReadUInt32();
             uint ChunkSize = Strm.ReadUInt32();
             Strm.Position += 0x08;
 
@@ -107,6 +120,8 @@ public class MSBF : ILoadSaveFile
             long ChunkStart = Strm.Position;
             ushort NodeCount = Strm.ReadUInt16();
             ushort IndexCount = Strm.ReadUInt16();
+            if (!StreamUtil.GetCurrentEndian()) 
+                IndexCount = BinaryPrimitives.ReverseEndianness(IndexCount);
             Strm.Position += 0x04;
 
             for (int i = 0; i < NodeCount; i++)
@@ -167,10 +182,6 @@ public class MSBF : ILoadSaveFile
         Strm.WriteUInt16(0xFEFF);
         Strm.Write(CollectionUtil.InitilizeArray<byte>(0, 3));
         Strm.WriteUInt8(3); //Version
-        Strm.WritePlaceholder(2); //Section Count
-        Strm.WriteUInt16(0);
-        Strm.WritePlaceholder(4); //Filesize
-        Strm.Write(CollectionUtil.InitilizeArray<byte>(0, 0x0A));
 
         WriteFLW2();
         WriteFEN1();
@@ -186,7 +197,7 @@ public class MSBF : ILoadSaveFile
             GetFlattenedNodes(ref TemporaryNodes);
 
             long ChunkStart = Strm.Position;
-            Strm.WriteString(MAGIC_FLW2, Encoding.ASCII, null);
+            Strm.WriteUInt32(MAGIC_FLW2);
             Strm.WritePlaceholder(4); //Size
             Strm.Write(CollectionUtil.InitilizeArray<byte>(0, 0x08));
             Strm.WriteUInt16((ushort)TemporaryNodes.Count);
@@ -257,7 +268,7 @@ public class MSBF : ILoadSaveFile
                 Buckets.Add([]);
 
             long ChunkStart = Strm.Position;
-            Strm.WriteString(MAGIC_FEN1, Encoding.ASCII, null);
+            Strm.WriteUInt32(MAGIC_FEN1);
             Strm.WritePlaceholder(4);
             Strm.Write(CollectionUtil.InitilizeArray<byte>(0, 0x08));
 
