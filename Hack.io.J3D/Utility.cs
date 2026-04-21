@@ -28,7 +28,8 @@ public static partial class Utility
 
         bool CheckMagic(string str)
         {
-            bool v = Strm.ReadString(Encoding.ASCII, str.Length).Equals(str);
+            string s = Strm.ReadString(str.Length, Encoding.ASCII);
+            bool v = s.Equals(str);
             Strm.Position -= str.Length;
             return v;
         }
