@@ -47,11 +47,30 @@ public static class CollectionUtil
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void SwapValues<T>(ref T Left, ref T Right) => (Right, Left) = (Left, Right);
     /// <summary>
-    /// Swaps two values using a Tuple
+    /// Swaps two values using a System.Tuple
     /// </summary>
     /// <typeparam name="T"></typeparam>
     /// <param name="Values">The tuple to swap values of</param>
     public static void SwapValues<T>(ref Tuple<T, T> Values) => Values = new Tuple<T, T>(Values.Item2, Values.Item1);
+    /// <summary>
+    /// Swaps two values using a ValueTuple
+    /// </summary>
+    /// <typeparam name="T"></typeparam>
+    /// <param name="Values">The tuple to swap values of</param>
+    public static void SwapValues<T>(ref (T, T) Values) => Values = (Values.Item2, Values.Item1);
+    /// <summary>
+    /// Swaps two values in a collection
+    /// </summary>
+    /// <typeparam name="T"></typeparam>
+    /// <param name="List"></param>
+    /// <param name="LeftIndex"></param>
+    /// <param name="RightIndex"></param>
+    public static void SwapValues<T>(ref IList<T> List, int LeftIndex, int RightIndex)
+    {
+        (T l, T r) = (List[LeftIndex], List[RightIndex]);
+        SwapValues(ref l, ref r);
+        (List[LeftIndex], List[RightIndex]) = (l, r);
+    }
     /// <summary>
     /// Cycles an set of objects. Can be cycled backwards
     /// </summary>

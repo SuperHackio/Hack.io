@@ -20,7 +20,8 @@ public static class StreamUtil
 
     //====================================================================================================
 
-    private static readonly Stack<bool> EndianStack = [];
+    private static readonly AsyncLocal<Stack<bool>> _endianStack = new();
+    private static Stack<bool> EndianStack => _endianStack.Value ??= [];
     private static bool UseBigEndian => EndianStack.Count > 0 && EndianStack.Peek();
 
     /// <summary>
