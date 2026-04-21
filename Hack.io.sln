@@ -45,6 +45,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Hack.io.TPL", "Hack.io.TPL\
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Hack.io.CIT", "Hack.io.CIT\Hack.io.CIT.csproj", "{5DBCA2CD-8A0B-456F-8C2A-3D73C0340006}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Hack.io.KCL", "Hack.io.KCL\Hack.io.KCL.csproj", "{4230FF83-28E5-4223-AB94-04AF2DD1FE1A}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -139,6 +141,10 @@ Global
 		{5DBCA2CD-8A0B-456F-8C2A-3D73C0340006}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{5DBCA2CD-8A0B-456F-8C2A-3D73C0340006}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{5DBCA2CD-8A0B-456F-8C2A-3D73C0340006}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4230FF83-28E5-4223-AB94-04AF2DD1FE1A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4230FF83-28E5-4223-AB94-04AF2DD1FE1A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4230FF83-28E5-4223-AB94-04AF2DD1FE1A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4230FF83-28E5-4223-AB94-04AF2DD1FE1A}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -248,8 +248,27 @@ public class BCSV : ILoadSaveFile
         foreach (Field item in Fields.Values)
             item.AutoRecalc = toggle;
     }
-    
-    
+
+    /// <summary>
+    /// Allows iteration of all entries
+    /// </summary>
+    /// <returns></returns>
+    public IEnumerable<Entry> GetEntryIter()
+    {
+        foreach (Entry item in Entries)
+            yield return item; // Custom logic
+    }
+    /// <summary>
+    /// Allows iteration of all fields
+    /// </summary>
+    /// <returns></returns>
+    public IEnumerable<Field> GetFieldIter()
+    {
+        foreach (Field item in Fields.Values)
+            yield return item; // Custom logic
+    }
+
+
     private void UpdateEntryFields(ref Entry Element)
     {
         Element.Encoding = Encoding;
@@ -919,7 +938,7 @@ public class BCSV : ILoadSaveFile
     public static void CalculateFieldDataDefault(ref BCSV target)
     {
         //Basic, uncompressed BCSV organization
-        List<Field> SortedFields = [.. target.Fields.Values];
+        List<Field> SortedFields = [.. target.GetFieldIter()];
         SortedFields.Sort(JGadgetFieldSort);
 
         ushort entrysize = 0;
