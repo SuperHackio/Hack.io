@@ -465,11 +465,11 @@ public class KCL : ILoadSaveFile
             return new()
             {
                 Height = length,
-                Position = VertexA,
-                FaceNormal = Normal,
-                EdgeANormal = normalA,
-                EdgeBNormal = normalB,
-                EdgeCNormal = normalC,
+                Position = VertexA.AbsZero(), // unlikely to occur but may as well...
+                FaceNormal = Normal.AbsZero(),
+                EdgeANormal = normalA.AbsZero(),
+                EdgeBNormal = normalB.AbsZero(),
+                EdgeCNormal = normalC.AbsZero(),
                 Attribute = Attribute,
             };
         }
