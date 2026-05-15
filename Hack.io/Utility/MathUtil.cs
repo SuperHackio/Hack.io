@@ -1,4 +1,6 @@
-﻿namespace Hack.io.Utility;
+﻿using System.Numerics;
+
+namespace Hack.io.Utility;
 
 /// <summary>
 /// A static class for math helper functions
@@ -200,4 +202,15 @@ public static class MathUtil
     /// <returns></returns>
     [CLSCompliant(false)]
     public static float AsFloat(this uint value) => BitConverter.ToSingle(BitConverter.GetBytes(value), 0);
+
+    /// <summary>
+    /// Converts instances of -0 into +0
+    /// </summary>
+    /// <param name="v">Source vector</param>
+    /// <returns></returns>
+    public static Vector3 AbsZero(this Vector3 v) => new(
+            v.X == -0.0f ? 0.0f : v.X,
+            v.Y == -0.0f ? 0.0f : v.Y,
+            v.Z == -0.0f ? 0.0f : v.Z
+        );
 }
