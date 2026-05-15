@@ -63,6 +63,7 @@ public static class GXTextureFormatUtil
     };
 
     public static bool IsPaletteFormat(this GXTextureFormat Format) => Format is GXTextureFormat.C4 or GXTextureFormat.C8 or GXTextureFormat.C14X2;
+    public static bool HasAlpha(this GXTextureFormat Format) => Format is GXTextureFormat.IA4 or GXTextureFormat.IA8 or GXTextureFormat.RGB5A3 or GXTextureFormat.RGBA8 or GXTextureFormat.CMPR;
 
     public static int GetBlockSize(this GXTextureFormat Format) => Format is GXTextureFormat.RGBA8 ? 64 : 32;
 }
