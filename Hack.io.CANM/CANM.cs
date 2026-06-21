@@ -32,19 +32,19 @@ public class CANM : ILoadSaveFile
     /// <summary>
     /// Unknown Value
     /// </summary>
-    public int Unknown1; // 0x00000001
+    public int Unknown1 = 1; // 0x00000001
     /// <summary>
     /// Unknown Value
     /// </summary>
-    public int Unknown2; // 0x00000000
+    public int Unknown2 = 0; // 0x00000000
     /// <summary>
     /// Unknown Value
     /// </summary>
-    public int Unknown3; // 0x00000001
+    public int Unknown3 = 1; // 0x00000001
     /// <summary>
     /// Unknown Value
     /// </summary>
-    public int Unknown4; // 0x00000004
+    public int Unknown4 = 4; // 0x00000004
 
     public CANM() => InitDictionary();
 
