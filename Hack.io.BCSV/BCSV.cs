@@ -482,7 +482,6 @@ public class BCSV : ILoadSaveFile
                         throw new NullReferenceException(string.Format(JMapException.INVALID_DATATYPE_ERROR, field.DataType));
                 }
             }
-            Strm.PadTo(0x04);
             Strm.Position = basepos + entrysize;
         }
 
